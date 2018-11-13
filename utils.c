@@ -69,7 +69,7 @@ void alloc_sparse(int m, int n, int NZ, COO *sparse)
     sp->NZ = NZ;
     sp->coords = calloc(NZ, sizeof(struct coord));
     sp->data = calloc(NZ, sizeof(double));
-    *sparse = sp;
+    *sparse = sp; //sparse is a pointer to a pointer to a struct, so this sets the value the pointer is pointing to - which is a pointer to a struct - to the sp pointer
 }
 
 /*
@@ -99,7 +99,9 @@ void convert_sparse_to_dense(const COO sparse, double **dense)
     int n;
     int i, j;
     alloc_dense(sparse->m, sparse->n, dense);
-    zero_dense(sparse->m, sparse->n, *dense);
+    zero_dense(sparse->m, sparse->n, *dense); //zero the array first. Then, j selects the 'block' (column), and then the i selects the row in the column.
+    // This location is then set to the data in the data array. i.e M = [[col-1][col-2]...] and within col-1:[_ _ i _]. As entire array has been zeroed beforehand
+    // there is no reason to write zeros in again. 
     for (n = 0; n < sparse->NZ; n++) {
         i = sparse->coords[n].i;
         j = sparse->coords[n].j;

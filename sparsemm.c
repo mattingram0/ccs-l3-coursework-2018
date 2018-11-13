@@ -16,6 +16,7 @@ void optimised_sparsemm_sum(const COO, const COO, const COO,
 
 static int check_sparsemm()
 {
+	//create 4 COO pointers
     COO A, B, Cbasic, Copt;
     double *basic, *opt;
     int i, j, m, n, k;
@@ -24,10 +25,10 @@ static int check_sparsemm()
     m = 20;
     k = 50;
     n = 30;
-    random_matrix(m, k, 0.1, &A);
-    random_matrix(k, n, 0.2, &B);
+    random_matrix(m, k, 0.1, &A); //creates random m x k matrix 
+    random_matrix(k, n, 0.2, &B); //creates random k x n matrix
 
-    basic_sparsemm(A, B, &Cbasic);
+    basic_sparsemm(A, B, &Cbasic); //basic matrix matrix multiplication
     optimised_sparsemm(A, B, &Copt);
 
     convert_sparse_to_dense(Cbasic, &basic);
