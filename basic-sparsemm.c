@@ -4,9 +4,26 @@
 
 #include "utils.h"
 
+
+#ifdef LIKWID_PERFMON
+#include <likwid.h>
+#else
+#define LIKWID_MARKER_INIT
+#define LIKWID_MARKER_THREADINIT
+#define LIKWID_MARKER_SWITCH
+#define LIKWID_MARKER_REGISTER(regionTag)
+#define LIKWID_MARKER_START(regionTag)
+#define LIKWID_MARKER_STOP(regionTag)
+#define LIKWID_MARKER_CLOSE
+#define LIKWID_MARKER_GET(regionTag, nevents, events, time, count)
+#endif
+
 /* Compute C = C + A*B in dense, column major, format. */
 static void dgemm(int m, int n, int k, const double *a, const double *b, double *c)
 {
+
+	LIKWID_MARKER_THREADINIT;
+	LIKWID_MARKER_START("dgemm");
     int i, j, p;
     int lda = m;
     int ldb = k;
@@ -18,6 +35,9 @@ static void dgemm(int m, int n, int k, const double *a, const double *b, double 
             }
         }
     }
+    
+	LIKWID_MARKER_STOP("dgemm");
+	LIKWID_MARKER_CLOSE;  
 }
 
 /* Computes C = A*B by converting A and B to dense column major
@@ -37,6 +57,7 @@ static void dgemm(int m, int n, int k, const double *a, const double *b, double 
 //i.e C is a now a symbol referring to location 1234, holding 800, and location 800 now does not hold anything, so does not point to a COO struct anymore
 void basic_sparsemm(const COO A, const COO B, COO *C)
 {
+	
     double *a = NULL;
     double *b = NULL;
     double *c = NULL;
@@ -59,7 +80,9 @@ void basic_sparsemm(const COO A, const COO B, COO *C)
     alloc_dense(m, n, &c);
     zero_dense(m, n, c);
 
+
     dgemm(m, n, k, a, b, c); //Call the function that performs the actual matrix multiplication
+
     free_dense(&a);
     free_dense(&b);
     convert_dense_to_sparse(c, m, n, C);
@@ -73,6 +96,7 @@ void basic_sparsemm_sum(const COO A, const COO B, const COO C,
                         const COO D, const COO E, const COO F,
                         COO *O)
 {
+
     double *a = NULL;
     double *b = NULL;
     double *c = NULL;
@@ -141,4 +165,5 @@ void basic_sparsemm_sum(const COO A, const COO B, const COO C,
     free_dense(&d);
     convert_dense_to_sparse(c, m, n, O);
     free_dense(&c);
+
 }

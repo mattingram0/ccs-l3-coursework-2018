@@ -5,6 +5,20 @@
 
 #include "utils.h"
 
+
+#ifdef LIKWID_PERFMON
+#include <likwid.h>
+#else
+#define LIKWID_MARKER_INIT
+#define LIKWID_MARKER_THREADINIT
+#define LIKWID_MARKER_SWITCH
+#define LIKWID_MARKER_REGISTER(regionTag)
+#define LIKWID_MARKER_START(regionTag)
+#define LIKWID_MARKER_STOP(regionTag)
+#define LIKWID_MARKER_CLOSE
+#define LIKWID_MARKER_GET(regionTag, nevents, events, time, count)
+#endif
+
 void basic_sparsemm(const COO, const COO, COO*);
 void basic_sparsemm_sum(const COO, const COO, const COO,
                             const COO, const COO, const COO,
@@ -101,6 +115,8 @@ static int check_sparsemm_sum()
 }
 int main(int argc, char **argv)
 {
+	LIKWID_MARKER_INIT;
+
     COO O;
     FILE *f;
     if (!(argc == 2 || argc == 4 || argc == 8)) {
@@ -131,7 +147,7 @@ int main(int argc, char **argv)
         COO A, B;
         read_sparse(argv[2], &A);
         read_sparse(argv[3], &B);
-
+		
         optimised_sparsemm(A, B, &O);
 
         free_sparse(&A);
@@ -144,6 +160,7 @@ int main(int argc, char **argv)
         read_sparse(argv[5], &D);
         read_sparse(argv[6], &E);
         read_sparse(argv[7], &F);
+		
 
         optimised_sparsemm_sum(A, B, C, D, E, F, &O);
 
@@ -160,4 +177,6 @@ int main(int argc, char **argv)
     free_sparse(&O);
     fclose(f);
     return 0;
+	LIKWID_MARKER_STOP("dgemm");
+	LIKWID_MARKER_CLOSE;  
 }
