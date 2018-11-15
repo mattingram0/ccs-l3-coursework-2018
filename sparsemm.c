@@ -116,6 +116,7 @@ static int check_sparsemm_sum()
 int main(int argc, char **argv)
 {
 	LIKWID_MARKER_INIT;
+	LIKWID_MARKER_THREADINIT;
 
     COO O;
     FILE *f;
@@ -142,6 +143,7 @@ int main(int argc, char **argv)
         }
         pass |= check_sparsemm();
         pass |= check_sparsemm_sum();
+		LIKWID_MARKER_CLOSE;  
         return pass;
     } else if (argc == 4) {
         COO A, B;
@@ -177,6 +179,4 @@ int main(int argc, char **argv)
     free_sparse(&O);
     fclose(f);
     return 0;
-	LIKWID_MARKER_STOP("dgemm");
-	LIKWID_MARKER_CLOSE;  
 }

@@ -22,7 +22,6 @@
 static void dgemm(int m, int n, int k, const double *a, const double *b, double *c)
 {
 
-	LIKWID_MARKER_THREADINIT;
 	LIKWID_MARKER_START("dgemm");
     int i, j, p;
     int lda = m;
@@ -37,7 +36,6 @@ static void dgemm(int m, int n, int k, const double *a, const double *b, double 
     }
     
 	LIKWID_MARKER_STOP("dgemm");
-	LIKWID_MARKER_CLOSE;  
 }
 
 /* Computes C = A*B by converting A and B to dense column major
@@ -165,5 +163,4 @@ void basic_sparsemm_sum(const COO A, const COO B, const COO C,
     free_dense(&d);
     convert_dense_to_sparse(c, m, n, O);
     free_dense(&c);
-
 }
