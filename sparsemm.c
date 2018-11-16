@@ -143,7 +143,6 @@ int main(int argc, char **argv)
         }
         pass |= check_sparsemm();
         pass |= check_sparsemm_sum();
-		LIKWID_MARKER_CLOSE;  
         return pass;
     } else if (argc == 4) {
         COO A, B;
@@ -154,6 +153,7 @@ int main(int argc, char **argv)
 
         free_sparse(&A);
         free_sparse(&B);
+		LIKWID_MARKER_CLOSE;  
     } else {
         COO A, B, C, D, E, F;
         read_sparse(argv[2], &A);

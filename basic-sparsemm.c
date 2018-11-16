@@ -55,7 +55,7 @@ static void dgemm(int m, int n, int k, const double *a, const double *b, double 
 //i.e C is a now a symbol referring to location 1234, holding 800, and location 800 now does not hold anything, so does not point to a COO struct anymore
 void basic_sparsemm(const COO A, const COO B, COO *C)
 {
-	
+	LIKWID_MARKER_START("BasicSMM");	
     double *a = NULL;
     double *b = NULL;
     double *c = NULL;
@@ -85,6 +85,7 @@ void basic_sparsemm(const COO A, const COO B, COO *C)
     free_dense(&b);
     convert_dense_to_sparse(c, m, n, C);
     free_dense(&c);
+    LIKWID_MARKER_STOP("BasicSMM");
 }
 
 /* Computes O = (A + B + C) (D + E + F) by converting to dense column
