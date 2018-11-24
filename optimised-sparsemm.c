@@ -26,7 +26,7 @@ void basic_sparsemm_sum(const COO, const COO, const COO,
 void optimised_sparsemm(const COO A, const COO B, COO *C)
 {
 
-	//LIKWID_MARKER_START("OptimisedSMM");
+	LIKWID_MARKER_START("OptimisedSMM");
 	// A is a pointer to a struct
 //	printf("Variable Name | Memory Address | Value\n");
 //	printf("     A 	      | %p | %p \n", &A, A);
@@ -40,46 +40,29 @@ void optimised_sparsemm(const COO A, const COO B, COO *C)
 //	printf("              | %p | %p \n", C, *C);
 //	printf("              | %p       | %d \n", *C, *((int *)*C)); //We deference our pointer which gives us another pointer (memory address), which we then must cast into an integer pointer before we can then derefernce it correctly and print it out using the %int
 
-	int a, b, nzA, nzB, nzC, m, n, *partial, *product;
+	int a, b, nzA, nzB, m, n;
 	double *c = NULL;
-	char coords[2];
-	GHashTable* sparseC = g_hash_table_new(g_str_hash, g_int_equal);
+	GHashTable* sparseC = g_hash_table_new(g_str_hash, g_str_equal);
 
 	nzA = A->NZ;
 	nzB = B->NZ;
-	nzC = partial* = product* = 0;
-
 	m = A->m;
 	n = B->n;
 	*C = NULL;
 
-	//alloc_dense(m, n, &c);
-	//zero_dense(m, n, c);
+	alloc_dense(m, n, &c);
+	zero_dense(m, n, c);
 
 	for(a = 0; a < nzA; a++){
 		for(b = 0; b < nzA; b++){
 			if(A->coords[a].j == B->coords[b].i){
-				//c[B->coords[b].j * m + A->coords[a].i] = c[B->coords[b].j * m + A->coords[a].i] + A->data[a] * B->data[b];
-				product* = A->data[a] * B->data[b];
-				coords[0] = B->coords[b].j + '0';
-				coords[1] = A->coords[a].i + '0';
-				
-				partial = (*int) g_hash_table_lookup(sparseC, coords);
-				if(partial == NULL){
-					g_hash_table_insert(sparseC, coords, product);
-					nzC++;
-				else{
-					partial* += product*;
-					g_hash_table_insert(sparseC, coords, partial);
+				c[B->coords[b].j * m + A->coords[a].i] = c[B->coords[b].j * m + A->coords[a].i] + A->data[a] * B->data[b];
 			}
 		}
 	}
-	printf(g_hash_table_size(sparseC));
-	exit(0);
-    alloc_sparse(m, n, NZ, &sp);
 	convert_dense_to_sparse(c, m, n, C);
 	free_dense(&c);
-	//LIKWID_MARKER_STOP("OptimisedSMM");
+	LIKWID_MARKER_STOP("OptimisedSMM");
 	return;
 }
 /* Computes O = (A + B + C) (D + E + F).

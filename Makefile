@@ -43,7 +43,7 @@ check: sparsemm
 #gcc -03 -march=native -D_GNU_SOURCE -o sparsemm sparsemm.c optimised-sparsemm.o basic-sparsemm.o utils.o
 #which recompiles sparsemm.c optimised.o, basic-sparsemm.o and utils.o into our sparsemm executable
 sparsemm: sparsemm.c $(OBJ)
-	$(CC) $(CFLAGS) -o $@ $< $(OBJ) $(LDFLAGS)
+	$(CC) $(CFLAGS) $(GLIB_FLAGS) -o $@ $< $(OBJ) $(LDFLAGS)
 
 profile: sparsemm.c $(OBJ)
 	$(CC) $(PROFILE_FLAGS) $(GLIB_FLAGS) -o $@ $< $(OBJ) $(LIKWID_FLAGS)
