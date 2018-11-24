@@ -10,6 +10,7 @@ struct coord {
 
 //Create a COO struct, where COO = "Coordinate List" = List of (row, column, value) tuples.
 //m = no. row, n = no. columns, NZ = no. non zero. Coords pointer and data pointer
+//struct coord *coords is a pointer to an array of coordinate structs
 struct _p_COO {
     int m, n, NZ;
     struct coord *coords;
@@ -25,7 +26,7 @@ struct _p_COO {
 //and the struct itself will be located here. i.e test2 is a pointer to a struct
 typedef struct _p_COO *COO;
 
-//COO* in the function declaration means alloc_sparse takes a pointer to a COO object 
+//COO* in the function declaration means alloc_sparse takes a pointer to a pointer to a pointer to a COO struct. If you declare something of a COO type you get a pointer to a struct, if you then use COO* as an argument, you are telling C that you want a pointer to a pointer to a struct
 void alloc_sparse(int, int, int, COO*);
 void free_sparse(COO*);
 void alloc_dense(int, int, double **);

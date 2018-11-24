@@ -5,4 +5,4 @@ echo "likwid-perfctr -f -C 0 -g $3 -m ./profile results/${mat1}_X_${mat2}.matrix
 sbatch -n 1 -p test.q -t $4 -o ./output/${mat1}_X_${mat2}.txt profileBase.slurm
 sed -i '$ d' profileBase.slurm
 
-#To Use: $1 - mat/(file.matrix), $2 - mat/(file.matrix), $3 - event
+#To Use: $1 - mat/(file.matrix), $2 - mat/(file.matrix), $3 - event, $4 - time

@@ -63,7 +63,7 @@ void zero_dense(int m, int n, double *dense)
  */
 void alloc_sparse(int m, int n, int NZ, COO *sparse)
 {
-    COO sp = calloc(1, sizeof(struct _p_COO));
+    COO sp = calloc(1, sizeof(struct _p_COO)); //COO is a type def for a COO pointer. sp is a variable that holds a memory address, at this memory address our struct is located. calloc returns a pointer.  
     sp->m = m;
     sp->n = n;
     sp->NZ = NZ;

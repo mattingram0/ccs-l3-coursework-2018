@@ -4,7 +4,6 @@ do
 	[ -e "$mat" ] || continue
 	matName=$(echo $mat | cut -d'/' -f2 | cut -d'.' -f1)
 	echo "likwid-perfctr -f -C 0 -g DATA -m ./profile results/${matName}_X_${matName}.matrix mat/${matName}.matrix mat/${matName}.matrix" >> profileBase.slurm
-	echo "likwid-perfctr -f -C 0 -g DATA -m ./profile results/${matName}_X_${matName}.matrix mat/${matName}.matrix mat/${matName}.matrix" >> profileBase.slurm
 	sbatch -n 1 -p test.q -o ./output/${matName}_X_${matName}.txt profileBase.slurm
 	sed -i '$ d' profileBase.slurm
 done

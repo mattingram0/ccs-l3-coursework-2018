@@ -7,6 +7,7 @@
 CFLAGS = -O3 -march=native -D_GNU_SOURCE
 PROFILE_FLAGS = -O3 -pthread -DLIKWID_PERFMON -I/ddn/apps/Cluster-Apps/likwid/4.1/include -L/ddn/apps/Cluster-Apps/likwid/4.1/lib
 LIKWID_FLAGS = -llikwid -lm
+GLIB_FLAGS = `pkg-config --cflags --libs glib-2.0`
 LDFLAGS = -lm
 CC = gcc
 
@@ -45,14 +46,14 @@ sparsemm: sparsemm.c $(OBJ)
 	$(CC) $(CFLAGS) -o $@ $< $(OBJ) $(LDFLAGS)
 
 profile: sparsemm.c $(OBJ)
-	$(CC) $(PROFILE_FLAGS) -o $@ $< $(OBJ) $(LIKWID_FLAGS)
+	$(CC) $(PROFILE_FLAGS) $(GLIB_FLAGS) -o $@ $< $(OBJ) $(LIKWID_FLAGS)
 
 #As our make file works recursively, if when we run 'make sparsemm' our other .c files (basic-sparsemm.c etc) have changed, then our .o should be remade too. This recipe handles this:
 #Our target is our %.o file, and its prerequisites/dependencies are our %.c files and the header files. If a .c (or the header file) has changed, then we perform:
 #gcc -O3 -march=native  -D_GNU_SOURCE -c -o %.o %.c
 %.o: %.c $(HEADER)
 ifeq ($(PROFILE),true)
-	$(CC) $(PROFILE_FLAGS) $< -o $@ -c
+	$(CC) $(PROFILE_FLAGS) $(GLIB_FLAGS) $< -o $@ -c
 else
-	$(CC) $(CFLAGS) $< -o $@ -c
+	$(CC) $(CFLAGS) $(GLIB_FLAGS) $< -o $@ -c
 endif
