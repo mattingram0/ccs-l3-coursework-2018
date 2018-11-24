@@ -26,20 +26,28 @@ void basic_sparsemm_sum(const COO, const COO, const COO,
  */
 
 void add_value_to_sparse(gpointer coords, gpointer value, gpointer sp){
-	//int index = (int)(strchr(coords, '_') - ((char *) coords)) //Get a pointer to where our _ is in our coord string, then subtract from it the pointer to the start of our coords string, thus giving us the index of _ in our string).
-//	char * strj = (char*)coords;
-printf("%s - %10f \n",(char *)coords, *((double *)value));	
-	//char * stri = strtok(strj, ',');
+	static int counter = 0;
+	char* delim = ",";
+	char* stri = strtok((char*)coords, delim);
+	char* strj = strtok(NULL, delim);
+	int i = atoi(stri); //NOTE - Sorry for using atoi, it really is handy
+	int j = atoi(strj);
 	
-//	((COO)sp)->coords[NZ].i = i;
-//	((COO)sp)->coords[NZ].j = j;
-//	((COO)sp)->data[NZ] = val;
+	((COO)sp)->coords[counter].i = i;
+	((COO)sp)->coords[counter].j = j;
+	((COO)sp)->data[counter] = *((int *)value);
 	
+	counter++;
 }
 
 /* Converts our hashmap to COO formulated array */
-void convert_hashmap_to_sparse(GHashTable* hash, int m, int n, int NZ, COO C){
-	g_hash_table_foreach(hash, add_value_to_sparse, C);
+void convert_hashmap_to_sparse(GHashTable* hash, int m, int n, int NZ, COO* C){
+	COO sp;
+    alloc_sparse(m, n, NZ, &sp);
+
+	g_hash_table_foreach(hash, add_value_to_sparse, sp);
+
+	*C = sp;
 }
 
 void optimised_sparsemm(const COO A, const COO B, COO *C)
@@ -83,7 +91,7 @@ void optimised_sparsemm(const COO A, const COO B, COO *C)
 			if(A->coords[a].j == B->coords[b].i){
 				c[B->coords[b].j * m + A->coords[a].i] = c[B->coords[b].j * m + A->coords[a].i] + A->data[a] * B->data[b];
 				product = A->data[a] * B->data[b];
-				sprintf(coords, "%d_%d", B->coords[b].j, A->coords[a].i); //Turn our coordinates into a string separated with a _, to use as the key for our hash table . NOTE - vulnerable to buffer overflow
+				sprintf(coords, "%d,%d", B->coords[b].j, A->coords[a].i); //Turn our coordinates into a string separated with a _, to use as the key for our hash table . NOTE - vulnerable to buffer overflow
 				key = g_strdup(coords);
 				value = (double *) malloc(sizeof(double));
 				*value = product;
@@ -104,7 +112,7 @@ void optimised_sparsemm(const COO A, const COO B, COO *C)
 	}
 	//printf("%f \n", *((double *) g_hash_table_lookup(sparseC, test)));
 	printf("%d", (int) g_hash_table_size(sparseC));
-	convert_hashmap_to_sparse(sparseC, m, n, nzC, *C);
+//	convert_hashmap_to_sparse(sparseC, m, n, nzC, C);
 	convert_dense_to_sparse(c, m, n, C);
 	free_dense(&c);
 	//LIKWID_MARKER_STOP("OptimisedSMM");
