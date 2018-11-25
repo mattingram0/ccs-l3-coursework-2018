@@ -103,9 +103,119 @@ void optimised_sparsemm(const COO A, const COO B, COO *C)
 /* Computes O = (A + B + C) (D + E + F).
  * O should be allocated by this routine.
  */
+void sparsemm_sum_2(const COO A, const COO B, COO *S)
+{
+
+	int a, b, nzA, nzB, nzS, m, n; 
+	double *partial = NULL;
+	char coords[40];	
+	GHashTable* sparseS = g_hash_table_new_full(g_str_hash, g_str_equal, free, free);//Use the full version, specifying destructors
+
+	gchar *key;
+	gdouble *value;
+
+	nzA = A->NZ;
+	nzB = B->NZ;
+	m = A->m;
+	n = B->n;
+	*S = NULL;
+	nzS = 0;
+	
+	for(a = 0; a < nzA; a++){
+		sprintf(coords, "%d,%d", A->coords[a].i, A->coords[a].j);
+		value = (double *) malloc(sizeof(double));
+		*value = A->data[a];
+		key = g_strdup(coords);									  
+		g_hash_table_insert(sparseS, key, value);	
+		nzS++;
+	}
+
+	for(b = 0; b < nzB; b++){
+		sprintf(coords, "%d,%d", B->coords[b].i, B->coords[b].j);
+		partial = (double *) g_hash_table_lookup(sparseS, key);
+
+		if(partial == NULL){
+			value = (double *) malloc(sizeof(double));
+			*value = B->data[b];
+			key = g_strdup(coords);
+			g_hash_table_insert(sparseS, key, value);	
+			nzS++;
+		} else {
+			*pointer += B->data[b];
+		}
+	}
+
+	convert_hashmap_to_sparse(sparseS, m, n, nzS, S);
+	g_hash_table_destroy(sparseS);//Ensure that our potentially large hash table is freed from memory - NOTE
+	return;
+}
+
+void sparsemm_sum_3(const COO A, const COO B, const COO C, COO *S)
+{
+
+	int a, b, c, nzA, nzB, nzC, nzS, m, n; 
+	double *partial = NULL;
+	char coords[40];	
+	GHashTable* sparseS = g_hash_table_new_full(g_str_hash, g_str_equal, free, free);//Use the full version, specifying destructors
+
+	gchar *key;
+	gdouble *value;
+
+	nzA = A->NZ;
+	nzB = B->NZ;
+	nzC = C->NZ;
+	m = A->m;
+	n = B->n;
+	*S = NULL;
+	nzS = 0;
+	
+	for(a = 0; a < nzA; a++){
+		sprintf(coords, "%d,%d", A->coords[a].i, A->coords[a].j);
+		value = (double *) malloc(sizeof(double));
+		*value = A->data[a];
+		key = g_strdup(coords);									  
+		g_hash_table_insert(sparseS, key, value);	
+		nzS++;
+	}
+
+	for(b = 0; b < nzB; b++){
+		sprintf(coords, "%d,%d", B->coords[b].i, B->coords[b].j);
+		partial = (double *) g_hash_table_lookup(sparseS, key);
+
+		if(partial == NULL){
+			value = (double *) malloc(sizeof(double));
+			*value = B->data[b];
+			key = g_strdup(coords);
+			g_hash_table_insert(sparseS, key, value);	
+			nzS++;
+		} else {
+			*pointer += B->data[b];
+		}
+	}
+	for(c = 0; c < nzC; c++){
+		sprintf(coords, "%d,%d", C->coords[c].i, C->coords[c].j);
+		partial = (double *) g_hash_table_lookup(sparseS, key);
+
+		if(partial == NULL){
+			value = (double *) malloc(sizeof(double));
+			*value = C->data[c];
+			key = g_strdup(coords);
+			g_hash_table_insert(sparseS, key, value);	
+			nzS++;
+		} else {
+			*pointer += C->data[c];
+		}
+	}
+
+	convert_hashmap_to_sparse(sparseS, m, n, nzS, S);
+	g_hash_table_destroy(sparseS);//Ensure that our potentially large hash table is freed from memory - NOTE
+	return;
+}
+
 void optimised_sparsemm_sum(const COO A, const COO B, const COO C,
 		const COO D, const COO E, const COO F,
 		COO *O)
 {
+	
 	return basic_sparsemm_sum(A, B, C, D, E, F, O);
 }
