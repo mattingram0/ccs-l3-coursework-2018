@@ -56,7 +56,6 @@ static void dgemm(int m, int n, int k, const double *a, const double *b, double 
 void basic_sparsemm(const COO A, const COO B, COO *C)
 {
 	int i = 0;
-	for (i; i<3; i++){
 		LIKWID_MARKER_START("BasicSMM");	
 		double *a = NULL;
 		double *b = NULL;
@@ -88,7 +87,6 @@ void basic_sparsemm(const COO A, const COO B, COO *C)
 		convert_dense_to_sparse(c, m, n, C);
 		free_dense(&c);
 		LIKWID_MARKER_STOP("BasicSMM");
-	}
 }
 
 /* Computes O = (A + B + C) (D + E + F) by converting to dense column

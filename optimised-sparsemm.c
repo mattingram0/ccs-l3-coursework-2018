@@ -54,6 +54,7 @@ void convert_hashmap_to_sparse(GHashTable* hash, int m, int n, int NZ, COO* C){
 void optimised_sparsemm(const COO A, const COO B, COO *C)
 {
 
+	LIKWID_MARKER_START("OptimisedSMM");
 	int a, b, nzA, nzB, nzC, m, n; 
 	double product, *partial = NULL;
 	char coords[40];	//NOTE - this may be vulnerable to buffer of if mat large
@@ -69,28 +70,32 @@ void optimised_sparsemm(const COO A, const COO B, COO *C)
 	*C = NULL;
 	nzC = product = 0;
 
-	for(a = 0; a < nzA; a++){
+	LIKWID_MARKER_START("Optimised dgemm");
+
+	for(a = 0; a < nzA; a++){ //NOTE - time complexity is O(nzA . nzB) - much better than O(n^3)
 		for(b = 0; b < nzB; b++){
 			if(A->coords[a].j == B->coords[b].i){
-				sprintf(coords, "%d,%d", A->coords[a].i, B->coords[b].j); //Turn our coordinates into a string separated with a ,
-				key = g_strdup(coords);									  //to use as the key for our hash table. NOTE - vulnerable to buffer overflow
-
 				product = A->data[a] * B->data[b];
-				value = (double *) malloc(sizeof(double));
-				*value = product;
-			
+				sprintf(coords, "%d,%d", A->coords[a].i, B->coords[b].j); //Turn our coordinates into a string separated with a , - NOTE BO poss
 				partial = (double *) g_hash_table_lookup(sparseC, key);
-				if(partial == NULL){
+			
+				if(partial == NULL){ //NOTE - Optimised as only create the memory for new entries - space requirement is O(nzC) - linear
+					key = g_strdup(coords);									  
+					value = (double *) malloc(sizeof(double));
+					*value = product;
+					
 					g_hash_table_insert(sparseC, key, value);
 					nzC++;
 				}else{
-					*partial += *value;
+					*partial += product;
 				}
 			}
 		}
 	}
+
+	LIKWID_MARKER_STOP("Optimised dgemm");
 	convert_hashmap_to_sparse(sparseC, m, n, nzC, C);
-	//LIKWID_MARKER_STOP("OptimisedSMM");
+	LIKWID_MARKER_STOP("OptimisedSMM");
 	return;
 }
 
