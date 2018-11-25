@@ -64,6 +64,7 @@ static int check_sparsemm()
     free_sparse(&B);
     free_sparse(&Cbasic);
     free_sparse(&Copt);
+    printf("All checks passed!");
 
     return pass;
 }

@@ -21,21 +21,17 @@ void basic_sparsemm_sum(const COO, const COO, const COO,
 		const COO, const COO, const COO,
 		COO *);
 
-/* Computes C = A*B.
- * C should be allocated by this routine.
- */
-
 void add_value_to_sparse(gpointer coords, gpointer value, gpointer sp){
 	static int counter = 0;
 	char* delim = ",";
-	char* stri = strtok((char*)coords, delim);
-	char* strj = strtok(NULL, delim);
-	int i = atoi(stri); //NOTE - Sorry for using atoi, it really is handy
+	char* stri = strtok((char*)coords, delim); //Split up our string key "i,j" into i and j
+	char* strj = strtok(NULL, delim);		   
+	int i = atoi(stri); 					   //Convert out i, j strings into integers - sorry for using atoi NOTE
 	int j = atoi(strj);
 	
 	((COO)sp)->coords[counter].i = i;
 	((COO)sp)->coords[counter].j = j;
-	((COO)sp)->data[counter] = *((int *)value);
+	((COO)sp)->data[counter] = *((double *)value);
 	
 	counter++;
 }
@@ -45,34 +41,24 @@ void convert_hashmap_to_sparse(GHashTable* hash, int m, int n, int NZ, COO* C){
 	COO sp;
     alloc_sparse(m, n, NZ, &sp);
 
+	//Loop through every key, value pair in our matrix, calling 'add_value_to_sparse' on each one, passing sp to the function
 	g_hash_table_foreach(hash, add_value_to_sparse, sp);
 
 	*C = sp;
 }
 
+
+/* Computes C = A*B.
+ * C should be allocated by this routine.
+ */
 void optimised_sparsemm(const COO A, const COO B, COO *C)
 {
 
-	//LIKWID_MARKER_START("OptimisedSMM");
-	// A is a pointer to a struct
-	//	printf("Variable Name | Memory Address | Value\n");
-	//	printf("     A 	      | %p | %p \n", &A, A);
-	//	printf("              | %p       | %d \n", A, *((int *)A)); //We must first cast our struct pointer to an int pointer and then deference - hacky 
-
-	//	basic_sparsemm(A, B, C);
-
-	// C is a pointer to a pointer to a struct
-	//	printf("Variable Name | Memory Address | Value\n");
-	//	printf("     C 	      | %p | %p \n", &C, C);
-	//	printf("              | %p | %p \n", C, *C);
-	//	printf("              | %p       | %d \n", *C, *((int *)*C)); //We deference our pointer which gives us another pointer (memory address), which we then must cast into an integer pointer before we can then derefernce it correctly and print it out using the %int
-
 	int a, b, nzA, nzB, nzC, m, n; 
-	double product, *partial, temp, *c = NULL;
-	char coords[40];//NOTE - this may be vulnerable to buffer of if mat large
+	double product, *partial = NULL;
+	char coords[40];	//NOTE - this may be vulnerable to buffer of if mat large
 	GHashTable* sparseC = g_hash_table_new(g_str_hash, g_str_equal);
 
-	char* test = "0_0\0";
 	gchar *key;
 	gdouble *value;
 
@@ -81,40 +67,29 @@ void optimised_sparsemm(const COO A, const COO B, COO *C)
 	m = A->m;
 	n = B->n;
 	*C = NULL;
-	nzC = product = temp = 0;
-
-	alloc_dense(m, n, &c);
-	zero_dense(m, n, c);
+	nzC = product = 0;
 
 	for(a = 0; a < nzA; a++){
-		for(b = 0; b < nzA; b++){
+		for(b = 0; b < nzB; b++){
 			if(A->coords[a].j == B->coords[b].i){
-				c[B->coords[b].j * m + A->coords[a].i] = c[B->coords[b].j * m + A->coords[a].i] + A->data[a] * B->data[b];
+				sprintf(coords, "%d,%d", A->coords[a].i, B->coords[b].j); //Turn our coordinates into a string separated with a ,
+				key = g_strdup(coords);									  //to use as the key for our hash table. NOTE - vulnerable to buffer overflow
+
 				product = A->data[a] * B->data[b];
-				sprintf(coords, "%d,%d", B->coords[b].j, A->coords[a].i); //Turn our coordinates into a string separated with a _, to use as the key for our hash table . NOTE - vulnerable to buffer overflow
-				key = g_strdup(coords);
 				value = (double *) malloc(sizeof(double));
 				*value = product;
+			
 				partial = (double *) g_hash_table_lookup(sparseC, key);
 				if(partial == NULL){
 					g_hash_table_insert(sparseC, key, value);
-					//temp = *((double *) g_hash_table_lookup(sparseC, value));
-					//printf("%f \n", temp);
 					nzC++;
 				}else{
 					*partial += *value;
-					//temp = *partial + product;
-				//g_hash_table_insert(sparseC, key, &temp);
 				}
-			
 			}
 		}
 	}
-	//printf("%f \n", *((double *) g_hash_table_lookup(sparseC, test)));
-	printf("%d", (int) g_hash_table_size(sparseC));
-//	convert_hashmap_to_sparse(sparseC, m, n, nzC, C);
-	convert_dense_to_sparse(c, m, n, C);
-	free_dense(&c);
+	convert_hashmap_to_sparse(sparseC, m, n, nzC, C);
 	//LIKWID_MARKER_STOP("OptimisedSMM");
 	return;
 }
