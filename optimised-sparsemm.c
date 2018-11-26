@@ -58,7 +58,7 @@ void optimised_sparsemm(const COO A, const COO B, COO *C)
 	int a, b, nzA, nzB, nzC, m, n; 
 	double product, *partial = NULL;
 	char coords[40];	//NOTE - this may be vulnerable to buffer of if mat large
-	GHashTable* sparseC = g_hash_table_new(g_str_hash, g_str_equal);
+	GHashTable* sparseC = g_hash_table_new_full(g_str_hash, g_str_equal, free, free);
 
 	gchar *key;
 	gdouble *value;
@@ -95,6 +95,7 @@ void optimised_sparsemm(const COO A, const COO B, COO *C)
 
 	LIKWID_MARKER_STOP("Optimised dgemm");
 	convert_hashmap_to_sparse(sparseC, m, n, nzC, C);
+	g_hash_table_destroy(sparseC);
 	LIKWID_MARKER_STOP("OptimisedSMM");
 	return;
 }
