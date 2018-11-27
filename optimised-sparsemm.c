@@ -142,7 +142,7 @@ void sparsemm_sum_2(const COO A, const COO B, COO *S)
 			g_hash_table_insert(sparseS, key, value);	
 			nzS++;
 		} else {
-			*pointer += B->data[b];
+			*partial += B->data[b];
 		}
 	}
 
@@ -190,7 +190,7 @@ void sparsemm_sum_3(const COO A, const COO B, const COO C, COO *S)
 			g_hash_table_insert(sparseS, key, value);	
 			nzS++;
 		} else {
-			*pointer += B->data[b];
+			*partial += B->data[b];
 		}
 	}
 	for(c = 0; c < nzC; c++){
@@ -204,7 +204,7 @@ void sparsemm_sum_3(const COO A, const COO B, const COO C, COO *S)
 			g_hash_table_insert(sparseS, key, value);	
 			nzS++;
 		} else {
-			*pointer += C->data[c];
+			*partial += C->data[c];
 		}
 	}
 
