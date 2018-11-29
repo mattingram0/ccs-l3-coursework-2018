@@ -51,17 +51,18 @@ void convert_hashmap_to_sparse(GHashTable* hash, int m, int n, int NZ, COO* C){
 /* Computes C = A*B.
  * C should be allocated by this routine.
  */
+
 void optimised_sparsemm(const COO A, const COO B, COO *C)
 {
 
-	LIKWID_MARKER_START("OptimisedSMM");
-	int a, b, nzA, nzB, nzC, m, n; 
+	LIKWID_MARKER_START("Optimised Sparsemm - Whole Function");
+	int a, b, nzA, nzB, nzC, m, n, estimate; 
 	double product, *partial = NULL;
 	char coords[40];	//NOTE - this may be vulnerable to buffer of if mat large
 	GHashTable* sparseC = g_hash_table_new(g_str_hash, g_str_equal);
 
 	gchar *key;
-	gdouble *value;
+	gdouble *memPtr, *memPool;
 
 	nzA = A->NZ;
 	nzB = B->NZ;
@@ -69,33 +70,48 @@ void optimised_sparsemm(const COO A, const COO B, COO *C)
 	n = B->n;
 	*C = NULL;
 	nzC = product = 0;
+	//density = (nzA / (A->m * A->n)) + (nzB / (B->m * B->n));
+	//estimate = density * A->n * B->m; 
+	estimate = (nzA * B->m / A->n) + (nzB * A->n / B->n);
+	memPool = (double *) malloc(sizeof(double) * estimate); 
+	memPtr = memPool;
 
-	LIKWID_MARKER_START("Optimised dgemm");
+	LIKWID_MARKER_START("Optimised Sparsemm - Loops");
 
 	for(a = 0; a < nzA; a++){ //NOTE - time complexity is O(nzA . nzB) - much better than O(n^3)
 		for(b = 0; b < nzB; b++){
 			if(A->coords[a].j == B->coords[b].i){
 				product = A->data[a] * B->data[b];
 				sprintf(coords, "%d,%d", A->coords[a].i, B->coords[b].j); //Turn our coordinates into a string separated with a , - NOTE BO poss
-				partial = (double *) g_hash_table_lookup(sparseC, key);
+//
+				LIKWID_MARKER_START("Optimised Sparsemm - Hash Table Access");
+				partial = (double *) g_hash_table_lookup(sparseC, coords);
 			
 				if(partial == NULL){ //NOTE - Optimised as only create the memory for new entries - space requirement is O(nzC) - linear
+					if(nzC == estimate){ //If we have exceeded the number of non zero elements we estimated, then allocate more memory and realign pointers
+						estimate += ((nzA - a)/nzA + 0.01) * estimate;
+						memPool = (double *) realloc(memPool, sizeof(double) * estimate);
+						memPtr = memPool + nzC; 
+						//realloc more memory
+					}
 					key = g_strdup(coords);									  
-					value = (double *) malloc(sizeof(double));
-					*value = product;
+					*memPtr = product;		
 					
-					g_hash_table_insert(sparseC, key, value);
+					g_hash_table_insert(sparseC, key, memPtr);
 					nzC++;
+					memPtr++;
 				}else{
 					*partial += product;
 				}
+			LIKWID_MARKER_STOP("Optimised Sparsemm - Hash Table Access");
 			}
 		}
 	}
-
-	LIKWID_MARKER_STOP("Optimised dgemm");
+	LIKWID_MARKER_STOP("Optimised Sparsemm - Loops");
 	convert_hashmap_to_sparse(sparseC, m, n, nzC, C);
-	LIKWID_MARKER_STOP("OptimisedSMM");
+	LIKWID_MARKER_STOP("Optimised Sparsemm - Whole Function");
+	free(memPool);
+	g_hash_table_destroy(sparseC);
 	return;
 }
 

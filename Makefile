@@ -12,7 +12,7 @@ LDFLAGS = -lm
 CC = gcc
 
 #Variable to test if we are profiling:
-PROFILE = false
+PROFILE = true
 
 #List of object files, followed by the header files
 OBJ = optimised-sparsemm.o basic-sparsemm.o utils.o
