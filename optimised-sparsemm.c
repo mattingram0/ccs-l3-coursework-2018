@@ -51,15 +51,72 @@ void convert_hashmap_to_sparse(GHashTable* hash, int m, int n, int NZ, COO* C){
 /* Computes C = A*B.
  * C should be allocated by this routine.
  */
+int col_sort(const void *a, const void *b){
+	if(((int *)a)[1] < ((int *)b)[1]){
+		return -1;
+	}else if(((int *)a)[1] == ((int *)b)[1]){
+		if(((int *)a)[0] < ((int *)b)[0]) 
+			return -1;
+		return 1;
+	}else{
+		return 1;
+	}
+}
 
+void sort_by_col(const COO A, COO* S){
+	int nz, size, c;
+	void *unsorted, *head;
+	COO sp;
+	nz = A->NZ;
+	size = 2 * sizeof(int) + sizeof(double);
+	c = 0;
+
+	unsorted = malloc(nz * size);
+	head = unsorted;
+
+	//Create array of arrays to be sorted
+	for(c; c < nz; c++){
+		*(int *)head = A->coords[c].i;
+		head = (int *)head + 1;
+		*(int *)head = A->coords[c].j;
+		head = (int *)head + 1;
+		*(double *)head = A->data[c];
+		head = (double *)head + 1;
+	}
+
+	//Sort using our col sort comparator
+	qsort(unsorted, nz, size, col_sort);
+
+	//Allocate a new sparse COO object
+	alloc_sparse(A->m, A->n, nz, &sp);
+	
+	c = 0;
+	head = unsorted;
+
+	//Populate our sorted COO object
+	for(c; c < nz; c++){
+		sp->coords[c].i = *(int *)head;	
+		head = (int *)head + 1;
+		sp->coords[c].j = *(int *)head;	
+		head = (int *)head + 1;
+		sp->data[c] = *(double *)head;
+		head = (double *)head + 1;
+	}
+
+	*S = sp;
+	return;
+}
+	
 void optimised_sparsemm(const COO A, const COO B, COO *C)
 {
 
-	LIKWID_MARKER_START("Optimised Sparsemm - Whole Function");
+	//LIKWID_MARKER_START("Optimised Sparsemm - Whole Function");
 	int a, b, nzA, nzB, nzC, m, n, estimate; 
 	double product, *partial = NULL;
-	char coords[40];	//NOTE - this may be vulnerable to buffer of if mat large
+	char coords[15];	//NOTE - this may be vulnerable to buffer of if mat large
 	GHashTable* sparseC = g_hash_table_new(g_str_hash, g_str_equal);
+	sort_by_col(A, C);
+	return;
 
 	gchar *key;
 	gdouble *memPtr, *memPool;
@@ -73,10 +130,11 @@ void optimised_sparsemm(const COO A, const COO B, COO *C)
 	//density = (nzA / (A->m * A->n)) + (nzB / (B->m * B->n));
 	//estimate = density * A->n * B->m; 
 	estimate = (nzA * B->m / A->n) + (nzB * A->n / B->n);
+	printf("%d", estimate);
 	memPool = (double *) malloc(sizeof(double) * estimate); 
 	memPtr = memPool;
 
-	LIKWID_MARKER_START("Optimised Sparsemm - Loops");
+	//LIKWID_MARKER_START("Optimised Sparsemm - Loops");
 
 	for(a = 0; a < nzA; a++){ //NOTE - time complexity is O(nzA . nzB) - much better than O(n^3)
 		for(b = 0; b < nzB; b++){
@@ -84,7 +142,7 @@ void optimised_sparsemm(const COO A, const COO B, COO *C)
 				product = A->data[a] * B->data[b];
 				sprintf(coords, "%d,%d", A->coords[a].i, B->coords[b].j); //Turn our coordinates into a string separated with a , - NOTE BO poss
 //
-				LIKWID_MARKER_START("Optimised Sparsemm - Hash Table Access");
+				//LIKWID_MARKER_START("Optimised Sparsemm - Hash Table Access");
 				partial = (double *) g_hash_table_lookup(sparseC, coords);
 			
 				if(partial == NULL){ //NOTE - Optimised as only create the memory for new entries - space requirement is O(nzC) - linear
@@ -103,13 +161,13 @@ void optimised_sparsemm(const COO A, const COO B, COO *C)
 				}else{
 					*partial += product;
 				}
-			LIKWID_MARKER_STOP("Optimised Sparsemm - Hash Table Access");
+			//LIKWID_MARKER_STOP("Optimised Sparsemm - Hash Table Access");
 			}
 		}
 	}
-	LIKWID_MARKER_STOP("Optimised Sparsemm - Loops");
+	//LIKWID_MARKER_STOP("Optimised Sparsemm - Loops");
 	convert_hashmap_to_sparse(sparseC, m, n, nzC, C);
-	LIKWID_MARKER_STOP("Optimised Sparsemm - Whole Function");
+	//LIKWID_MARKER_STOP("Optimised Sparsemm - Whole Function");
 	free(memPool);
 	g_hash_table_destroy(sparseC);
 	return;
