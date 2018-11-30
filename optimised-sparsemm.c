@@ -110,13 +110,11 @@ void sort_by_col(const COO A, COO* S){
 void optimised_sparsemm(const COO A, const COO B, COO *C)
 {
 
-	//LIKWID_MARKER_START("Optimised Sparsemm - Whole Function");
+	LIKWID_MARKER_START("Optimised Sparsemm - Whole Function");
 	int a, b, nzA, nzB, nzC, m, n, estimate; 
 	double product, *partial = NULL;
 	char coords[15];	//NOTE - this may be vulnerable to buffer of if mat large
 	GHashTable* sparseC = g_hash_table_new(g_str_hash, g_str_equal);
-	sort_by_col(A, C);
-	return;
 
 	gchar *key;
 	gdouble *memPtr, *memPool;
@@ -127,10 +125,7 @@ void optimised_sparsemm(const COO A, const COO B, COO *C)
 	n = B->n;
 	*C = NULL;
 	nzC = product = 0;
-	//density = (nzA / (A->m * A->n)) + (nzB / (B->m * B->n));
-	//estimate = density * A->n * B->m; 
-	estimate = (nzA * B->m / A->n) + (nzB * A->n / B->n);
-	printf("%d", estimate);
+	estimate = (int)(((double)nzA * (double)B->m /(double)A->n) + ((double)nzB * (double)A->n / (double)B->n));
 	memPool = (double *) malloc(sizeof(double) * estimate); 
 	memPtr = memPool;
 
@@ -142,7 +137,7 @@ void optimised_sparsemm(const COO A, const COO B, COO *C)
 				product = A->data[a] * B->data[b];
 				sprintf(coords, "%d,%d", A->coords[a].i, B->coords[b].j); //Turn our coordinates into a string separated with a , - NOTE BO poss
 //
-				//LIKWID_MARKER_START("Optimised Sparsemm - Hash Table Access");
+	//			LIKWID_MARKER_START("Optimised Sparsemm - Hash Table Access");
 				partial = (double *) g_hash_table_lookup(sparseC, coords);
 			
 				if(partial == NULL){ //NOTE - Optimised as only create the memory for new entries - space requirement is O(nzC) - linear
@@ -161,13 +156,13 @@ void optimised_sparsemm(const COO A, const COO B, COO *C)
 				}else{
 					*partial += product;
 				}
-			//LIKWID_MARKER_STOP("Optimised Sparsemm - Hash Table Access");
+	//		LIKWID_MARKER_STOP("Optimised Sparsemm - Hash Table Access");
 			}
 		}
 	}
 	//LIKWID_MARKER_STOP("Optimised Sparsemm - Loops");
 	convert_hashmap_to_sparse(sparseC, m, n, nzC, C);
-	//LIKWID_MARKER_STOP("Optimised Sparsemm - Whole Function");
+	LIKWID_MARKER_STOP("Optimised Sparsemm - Whole Function");
 	free(memPool);
 	g_hash_table_destroy(sparseC);
 	return;
