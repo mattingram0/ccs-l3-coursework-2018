@@ -4,7 +4,7 @@
 #@ - Left hand side of the ':' in the recipe
 #< - first item in the dependency list
 
-CFLAGS = -O3 -march=native -D_GNU_SOURCE
+CFLAGS = -O3 -g -march=native -D_GNU_SOURCE
 PROFILE_FLAGS = -O3 -pthread -DLIKWID_PERFMON -I/ddn/apps/Cluster-Apps/likwid/4.1/include -L/ddn/apps/Cluster-Apps/likwid/4.1/lib
 LIKWID_FLAGS = -llikwid -lm
 GLIB_FLAGS = `pkg-config --cflags --libs glib-2.0`
