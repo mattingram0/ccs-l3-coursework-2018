@@ -152,7 +152,7 @@ int main(int argc, char **argv)
 		
         optimised_sparsemm(A, B, &O);
 
-        free_sparse(&A);
+        //free_sparse(&A);
         free_sparse(&B);
 		LIKWID_MARKER_CLOSE;  
     } else {
