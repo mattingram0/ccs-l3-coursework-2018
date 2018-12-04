@@ -122,14 +122,14 @@ void sort_coo(const COO A, COO* S, int compare(const void *, const void *)){
 	return;
 }
 
-void optimised_sparsemm(COO A, const COO B, COO *C)
+void optimised_sparsemm(COO A, COO B, COO *C)
 {
 	LIKWID_MARKER_START("Optimised Sparsemm - Whole Function");
 	int a, b, nzA, nzB, nzC = 0, m, n, estimate, newEstimate, currentCol = 0, beginRow = 0, nextRow = 0;
 	double product, errorProp, *partial = NULL;
 	char coords[15];	//NOTE - this may be vulnerable to buffer of if mat large
 	GHashTable* sparseC = g_hash_table_new(g_str_hash, g_str_equal);
-	COO S;
+	COO S, I;
 	gchar *key;
 	gdouble *memPtr, *newPtr;
 	GPtrArray *memPtrs;
@@ -149,16 +149,24 @@ void optimised_sparsemm(COO A, const COO B, COO *C)
 
 	//Sort by column, freeing our old matrix, then setting A to our sorted matrix to ensure it gets freed later in sparsemm.c
 	sort_coo(A, &S, col_sort);
-	free_sparse(&A);
 
 	for(a = 0; a < nzA; a++){
-		if(S->coords[a].j != currentCol){
-			currentCol = S->coords[a].j;
-			beginRow = nextRow;
-		}
-
+		//Move our b back down to the beginning of the row which matches our column
 		b = beginRow;
 
+		//Skip values in our A matrix until our a column matches our b row
+		while(a < nzA && S->coords[a].j < B->coords[b].i){
+			a++;
+		}
+
+		//Skip values in our B matrix until our b row matches our a column
+		while(b < nzB && B->coords[b].i < S->coords[a].j){
+			b++;
+		}
+
+		beginRow = b;
+		currentCol = S->coords[a].j;
+		
 		while(b < nzB && B->coords[b].i == currentCol){
 			product = S->data[a] * B->data[b];
 			sprintf(coords, "%d,%d", S->coords[a].i, B->coords[b].j);
@@ -185,8 +193,6 @@ void optimised_sparsemm(COO A, const COO B, COO *C)
 
 			b++;	
 		}
-
-		nextRow = b;
 	}
 
 	//LIKWID_MARKER_STOP("Optimised Sparsemm - Loops");

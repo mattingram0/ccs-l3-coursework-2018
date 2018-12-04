@@ -27,6 +27,9 @@ void optimised_sparsemm(const COO, const COO, COO*);
 void optimised_sparsemm_sum(const COO, const COO, const COO,
                             const COO, const COO, const COO,
                             COO *);
+int col_sort(const void *a, const void *b);
+int row_sort(const void *a, const void *b);
+void sort_coo(const COO A, COO* S, int compare(const void *, const void *));
 
 static int check_sparsemm()
 {
@@ -36,12 +39,14 @@ static int check_sparsemm()
     int i, j, m, n, k;
     int pass = 0;
 
-    m = 20;
-    k = 50;
-    n = 30;
+	//SOMETHING TO DO WITH THESE VALUES
+	//30 50 31 works, but 29 50 31 does not?! look at matrix structure maybe, print out the matrices, walk through the algorithm with them, see which values are wrong
+    m = 215;
+    k = 178;
+    n = 537;
     random_matrix(m, k, 0.1, &A); //creates random m x k matrix 
     random_matrix(k, n, 0.2, &B); //creates random k x n matrix
-
+	
     basic_sparsemm(A, B, &Cbasic); //basic matrix matrix multiplication
     optimised_sparsemm(A, B, &Copt);
 
@@ -64,7 +69,6 @@ static int check_sparsemm()
     free_sparse(&B);
     free_sparse(&Cbasic);
     free_sparse(&Copt);
-    printf("All checks passed!");
 
     return pass;
 }
@@ -143,7 +147,7 @@ int main(int argc, char **argv)
             return 1;
         }
         pass |= check_sparsemm();
-        pass |= check_sparsemm_sum();
+        //pass |= check_sparsemm_sum();
         return pass;
     } else if (argc == 4) {
         COO A, B;
@@ -152,9 +156,9 @@ int main(int argc, char **argv)
 		
         optimised_sparsemm(A, B, &O);
 
-        //free_sparse(&A);
+        free_sparse(&A);
         free_sparse(&B);
-		LIKWID_MARKER_CLOSE;  
+	LIKWID_MARKER_CLOSE;  
     } else {
         COO A, B, C, D, E, F;
         read_sparse(argv[2], &A);
