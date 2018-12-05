@@ -146,6 +146,7 @@ void convert_dense_to_sparse(const double *dense, int m, int n,
                 sp->coords[NZ].j = j;
                 sp->data[NZ] = val;
                 NZ++;
+                //printf("[%d, %d, %f]\n", i, j, val);
             }
         }
     }

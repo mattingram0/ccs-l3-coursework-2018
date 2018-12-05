@@ -22,7 +22,6 @@ void basic_sparsemm_sum(const COO, const COO, const COO,
 		COO *);
 
 void add_value_to_sparse(gpointer coords, gpointer value, gpointer sp){
-	static int counter = 0;
 	char* delim = ",";
 	char* stri = strtok((char*)coords, delim); //Split up our string key "i,j" into i and j
 	char* strj = strtok(NULL, delim);
@@ -30,11 +29,15 @@ void add_value_to_sparse(gpointer coords, gpointer value, gpointer sp){
 	int i = atoi(stri); 					   //Convert out i, j strings into integers - sorry for using atoi NOTE
 	int j = atoi(strj);
 
-	((COO)sp)->coords[counter].i = i;
-	((COO)sp)->coords[counter].j = j;
-	((COO)sp)->data[counter] = *((double *)value);
+	((COO)sp)->coords[((COO)sp)->NZ].i = i;
+	((COO)sp)->coords[((COO)sp)->NZ].j = j;
+	((COO)sp)->data[((COO)sp)->NZ] = *((double *)value);
+	//printf("[%d, %d, %f]\n", i, j, *((double *)value));
+	((COO)sp)->NZ++;
+}
 
-	counter++;
+void print_ptr(gpointer ptr, gpointer userData){
+	//printf("Address: %p, Value: %p, Points to: %f\n", &ptr, ptr, *((double *)ptr));
 }
 
 void free_memory(gpointer ptr, gpointer userData){
@@ -45,9 +48,16 @@ void free_memory(gpointer ptr, gpointer userData){
 void convert_hashmap_to_sparse(GHashTable* hash, int m, int n, int NZ, COO* C){
 	COO sp;
 	alloc_sparse(m, n, NZ, &sp);
+
+	//Set NZ = 0 to use as a counter for our add_value_to_sparse function
+	sp->NZ = 0;
 	//Loop through every key, value pair in our matrix, calling 'add_value_to_sparse' on each one, passing sp to the function
 	g_hash_table_foreach(hash, add_value_to_sparse, sp);
 	*C = sp;
+	//printf("\nJust after convert_hashmap has *C = sp\n");
+	//printf("Data 0: %f\n", (*C)->data[0]);
+	//printf("Data 1: %f\n", (*C)->data[1]);
+	//printf("Data 2: %f\n", (*C)->data[2]);
 }
 
 
@@ -124,16 +134,33 @@ void sort_coo(const COO A, COO* S, int compare(const void *, const void *)){
 
 void optimised_sparsemm(COO A, COO B, COO *C)
 {
+	//printf("\n In OPTS\n");
+	//printf("A Data 1: %f\n", A->data[0]);
+	//printf("A Data 2: %f\n", A->data[1]);
+	//printf("A Data 3: %f\n", A->data[2]);
+	//printf("A Data 4: %f\n", A->data[3]);
+	//printf("A Data 5: %f\n", A->data[4]);
+	//printf("A Data 6: %f\n", A->data[5]);
+	//printf("A Data 7: %f\n", A->data[6]);
+	//printf("B Data 1: %f\n", B->data[0]);
+	//printf("B Data 2: %f\n", B->data[1]);
+	//printf("B Data 3: %f\n", B->data[2]);
+	//printf("B Data 4: %f\n", B->data[3]);
+	//printf("B Data 5: %f\n", B->data[4]);
+	//printf("B Data 6: %f\n", B->data[5]);
+	//printf("B Data 7: %f\n", B->data[6]);
 	LIKWID_MARKER_START("Optimised Sparsemm - Whole Function");
-	int a, b, nzA, nzB, nzC = 0, m, n, estimate, newEstimate, currentCol = 0, beginRow = 0, nextRow = 0;
+	int a, b, nzA, nzB, nzC = 0, m, n, estimate, newEstimate, currentCol = 0, beginRow = 0;
 	double product, errorProp, *partial = NULL;
 	char coords[15];	//NOTE - this may be vulnerable to buffer of if mat large
 	GHashTable* sparseC = g_hash_table_new(g_str_hash, g_str_equal);
-	COO S, I;
+
+	//Create COO objects for the sorted A and B matrices
+	COO AS, BS;
 	gchar *key;
 	gdouble *memPtr, *newPtr;
 	GPtrArray *memPtrs;
-	
+
 	//Array to keep track of memory pointers - could not simply use realloc as this would move the data pointed to by the pointers
 	//in the hash table
 	memPtrs = g_ptr_array_new();
@@ -148,28 +175,31 @@ void optimised_sparsemm(COO A, COO B, COO *C)
 	g_ptr_array_add(memPtrs, (gpointer)memPtr);	
 
 	//Sort by column, freeing our old matrix, then setting A to our sorted matrix to ensure it gets freed later in sparsemm.c
-	sort_coo(A, &S, col_sort);
+	sort_coo(A, &AS, col_sort);
+	//Sort by row
+	sort_coo(B, &BS, row_sort);
 
 	for(a = 0; a < nzA; a++){
 		//Move our b back down to the beginning of the row which matches our column
 		b = beginRow;
 
 		//Skip values in our A matrix until our a column matches our b row
-		while(a < nzA && S->coords[a].j < B->coords[b].i){
+		while(a < nzA && AS->coords[a].j < BS->coords[b].i){
 			a++;
 		}
 
 		//Skip values in our B matrix until our b row matches our a column
-		while(b < nzB && B->coords[b].i < S->coords[a].j){
+		while(b < nzB && BS->coords[b].i < AS->coords[a].j){
 			b++;
 		}
 
 		beginRow = b;
-		currentCol = S->coords[a].j;
-		
-		while(b < nzB && B->coords[b].i == currentCol){
-			product = S->data[a] * B->data[b];
-			sprintf(coords, "%d,%d", S->coords[a].i, B->coords[b].j);
+		currentCol = AS->coords[a].j;
+
+		while(b < nzB && BS->coords[b].i == currentCol){
+			product = AS->data[a] * BS->data[b];
+			//printf("A Data: %f, B Data: %f\n", AS->data[a], BS->data[a]);
+			sprintf(coords, "%d,%d", AS->coords[a].i, BS->coords[b].j);
 			partial = (double *) g_hash_table_lookup(sparseC, coords);
 
 			if(partial == NULL){ 
@@ -198,8 +228,10 @@ void optimised_sparsemm(COO A, COO B, COO *C)
 	//LIKWID_MARKER_STOP("Optimised Sparsemm - Loops");
 	convert_hashmap_to_sparse(sparseC, m, n, nzC, C);
 	LIKWID_MARKER_STOP("Optimised Sparsemm - Whole Function");
+	g_ptr_array_foreach(memPtrs, print_ptr, NULL);
 	g_ptr_array_foreach(memPtrs, free_memory, NULL);
-	free_sparse(&S);
+	free_sparse(&AS);
+	free_sparse(&BS);
 	g_hash_table_destroy(sparseC);
 	return;
 }
@@ -208,9 +240,148 @@ void optimised_sparsemm(COO A, COO B, COO *C)
 /* Computes O = (A + B + C) (D + E + F).
  * O should be allocated by this routine.
  */
+void add_3(const COO A, const COO B, const COO C, COO *S){
+
+	int a, b, c, nzA, nzB, nzC, nzS, estimate, newEstimate;
+	double errorProp, value = 0.0, *partial = NULL;
+	char coords[15];	//NOTE - this may be vulnerable to buffer of if mat large
+	GHashTable* sparseS = g_hash_table_new(g_str_hash, g_str_equal);
+	COO big, mid, sml, temp;
+	COO order[3];
+	gchar *key;
+	gdouble *memPtr, *newPtr;
+	GPtrArray *memPtrs;
+
+	nzA = A->NZ;
+	nzB = B->NZ;
+	nzC = C->NZ;
+
+	memPtrs = g_ptr_array_new();
+	order[0] = A;
+	order[1] = B;
+	order[2] = C;
+	//printf("\nnzA: %d, nzB: %d, nzC: %d\n", order[0]->NZ, order[1]->NZ, order[2]->NZ);
+
+	if(order[0]->NZ > order[1]->NZ){
+		order[0] = B;
+		order[1] = A;
+	}
+
+	if(order[0]->NZ > order[2]->NZ){
+		temp = order[0];
+		order[0] = order[2];
+		order[2] = temp;
+	}
+
+	if(order[1]->NZ > order[2]->NZ){
+		temp = order[1];
+		order[1] = order[2];
+		order[2] = temp;
+	}
+
+	big = order[2];
+	mid = order[1];
+	sml = order[0];
+	//printf("Big: %d, Medium: %d, Small: %d\n", big->NZ, mid->NZ, sml->NZ);
+	*S = NULL;
+	estimate = nzS = big->NZ;
+	memPtr = (double *) malloc(sizeof(double) * estimate); 
+	g_ptr_array_add(memPtrs, (gpointer)memPtr);	
+
+	for(a = 0; a < big->NZ; a++){
+		value =	big->data[a];
+		sprintf(coords, "%d,%d", big->coords[a].i, big->coords[a].j);
+		key = g_strdup(coords);									  
+		*memPtr = value;
+		g_hash_table_insert(sparseS, key, memPtr);
+		memPtr++;
+	}
+
+	for(b = 0; b < mid->NZ; b++){
+		value = mid->data[b];
+		sprintf(coords, "%d,%d", mid->coords[b].i, mid->coords[b].j);
+		partial = (double *) g_hash_table_lookup(sparseS, coords);
+
+		if (partial == NULL){
+			if(nzS == estimate){ 
+				newEstimate = mid->NZ;
+				memPtr = (double *) malloc(sizeof(double) * newEstimate);
+				estimate += newEstimate;
+				g_ptr_array_add(memPtrs, (gpointer)memPtr);		
+			}
+
+			key = g_strdup(coords);									  
+			*memPtr = value;		
+			g_hash_table_insert(sparseS, key, memPtr);
+			
+			nzS++;
+			memPtr++;
+		} else {
+			*partial += value;
+		}
+	}
+
+	for(c = 0; c < sml->NZ; c++){
+		value = sml->data[c];
+		sprintf(coords, "%d,%d", sml->coords[c].i, sml->coords[c].j);
+		partial = (double *) g_hash_table_lookup(sparseS, coords);
+
+		if (partial == NULL){
+			if(nzS == estimate){ 
+				newEstimate = sml->NZ;
+				memPtr = (double *) malloc(sizeof(double) * newEstimate);
+				estimate += newEstimate;
+				g_ptr_array_add(memPtrs, (gpointer)memPtr);		
+			}
+
+			key = g_strdup(coords);									  
+			*memPtr = value;		
+			g_hash_table_insert(sparseS, key, memPtr);
+
+			nzS++;
+			memPtr++;
+		} else {
+			*partial += value;
+		}
+	}
+
+	convert_hashmap_to_sparse(sparseS, A->m, A->n, nzS, S);
+	//printf("\n Post Convert Data \n");
+	//printf("S Data 0: %f\n", (*S)->data[0]);
+	//printf("S Data 1: %f\n", (*S)->data[1]);
+
+	g_ptr_array_foreach(memPtrs, print_ptr, NULL);
+	g_ptr_array_foreach(memPtrs, free_memory, NULL);
+	g_ptr_array_free(memPtrs, TRUE);
+	g_hash_table_destroy(sparseS);
+	return;
+}
+
 void optimised_sparsemm_sum(const COO A, const COO B, const COO C,
 		const COO D, const COO E, const COO F,
 		COO *O)
 {
-	return basic_sparsemm_sum(A, B, C, D, E, F, O);
+	COO sum1, sum2;
+	//printf("\nA + B + C");
+	add_3(A, B, C, &sum1);
+//	//printf("Sum1 Data 1: %f\n", sum1->data[0]);
+//	printf("Sum1 Data 2: %f\n", sum1->data[1]);
+//	printf("Sum1 Data 3: %f\n", sum1->data[2]);
+//	printf("Sum1 Data 4: %f\n", sum1->data[3]);
+//	printf("Sum1 Data 5: %f\n", sum1->data[4]);
+//	printf("Sum1 Data 6: %f\n", sum1->data[5]);
+//	printf("Sum1 Data 7: %f\n", sum1->data[6]);
+//
+	//printf("\nD + E + F");
+	add_3(D, E, F, &sum2);
+	//printf("Sum2 Data 1: %f\n", sum2->data[0]);
+	//printf("Sum2 Data 2: %f\n", sum2->data[1]);
+	//printf("Sum2 Data 3: %f\n", sum2->data[2]);
+	//printf("Sum2 Data 4: %f\n", sum2->data[3]);
+	//printf("Sum2 Data 5: %f\n", sum2->data[4]);
+	//printf("Sum2 Data 6: %f\n", sum2->data[5]);
+	//printf("Sum2 Data 7: %f\n", sum2->data[6]);
+	//printf("\nD + E + F");
+	optimised_sparsemm(sum1, sum2, O);
+	return;
 }

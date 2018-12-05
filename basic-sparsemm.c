@@ -135,7 +135,7 @@ void basic_sparsemm_sum(const COO A, const COO B, const COO C,
 				A->m, A->n, D->m, D->n);
 		exit(1);
 	}
-
+	
 	convert_sparse_to_dense(A, &a);
 	convert_sparse_to_dense(B, &b);
 	convert_sparse_to_dense(C, &c);
@@ -163,6 +163,7 @@ void basic_sparsemm_sum(const COO A, const COO B, const COO C,
 	dgemm(m, n, k, a, d, c);
 	free_dense(&a);
 	free_dense(&d);
+	//printf("\nBasic Sum\n");
 	convert_dense_to_sparse(c, m, n, O);
 	free_dense(&c);
 }

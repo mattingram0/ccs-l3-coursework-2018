@@ -39,11 +39,9 @@ static int check_sparsemm()
     int i, j, m, n, k;
     int pass = 0;
 
-	//SOMETHING TO DO WITH THESE VALUES
-	//30 50 31 works, but 29 50 31 does not?! look at matrix structure maybe, print out the matrices, walk through the algorithm with them, see which values are wrong
-    m = 215;
-    k = 178;
-    n = 537;
+    m = 20;
+    k = 50;
+    n = 30;
     random_matrix(m, k, 0.1, &A); //creates random m x k matrix 
     random_matrix(k, n, 0.2, &B); //creates random k x n matrix
 	
@@ -83,11 +81,17 @@ static int check_sparsemm_sum()
     m = 20;
     k = 50;
     n = 30;
+    //printf("A\n");
     random_matrix(m, k, 0.1, &A);
+    //printf("\nB\n");
     random_matrix(m, k, 0.4, &B);
+    //printf("\nC\n");
     random_matrix(m, k, 0.01, &C);
+    //printf("\nD\n");
     random_matrix(k, n, 0.2, &D);
+    //printf("\nE\n");
     random_matrix(k, n, 0.3, &E);
+    //printf("\nF\n");
     random_matrix(k, n, 0.15, &F);
     basic_sparsemm_sum(A, B, C, D, E, F, &Obasic);
     optimised_sparsemm_sum(A, B, C, D, E, F, &Oopt);
@@ -147,7 +151,14 @@ int main(int argc, char **argv)
             return 1;
         }
         pass |= check_sparsemm();
-        //pass |= check_sparsemm_sum();
+        pass |= check_sparsemm_sum();
+        
+        if(pass == 0){
+        	printf("All checks passed!\n");
+        } else {
+        	printf("Some checks failed!\n");
+        }
+
         return pass;
     } else if (argc == 4) {
         COO A, B;
