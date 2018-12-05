@@ -153,12 +153,6 @@ int main(int argc, char **argv)
         pass |= check_sparsemm();
         pass |= check_sparsemm_sum();
         
-        if(pass == 0){
-        	printf("All checks passed!\n");
-        } else {
-        	printf("Some checks failed!\n");
-        }
-
         return pass;
     } else if (argc == 4) {
         COO A, B;
@@ -169,7 +163,6 @@ int main(int argc, char **argv)
 
         free_sparse(&A);
         free_sparse(&B);
-	LIKWID_MARKER_CLOSE;  
     } else {
         COO A, B, C, D, E, F;
         read_sparse(argv[2], &A);
@@ -179,7 +172,6 @@ int main(int argc, char **argv)
         read_sparse(argv[6], &E);
         read_sparse(argv[7], &F);
 		
-
         optimised_sparsemm_sum(A, B, C, D, E, F, &O);
 
         free_sparse(&A);
@@ -190,6 +182,7 @@ int main(int argc, char **argv)
         free_sparse(&F);
     }
 
+	LIKWID_MARKER_CLOSE;  
     f = fopen(argv[1], "w");
     write_sparse(f, O);
     free_sparse(&O);

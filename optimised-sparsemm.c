@@ -10,8 +10,7 @@
 #define LIKWID_MARKER_THREADINIT
 #define LIKWID_MARKER_SWITCH
 #define LIKWID_MARKER_REGISTER(regionTag)
-#define LIKWID_MARKER_START(regionTag)
-#define LIKWID_MARKER_STOP(regionTag)
+
 #define LIKWID_MARKER_CLOSE
 #define LIKWID_MARKER_GET(regionTag, nevents, events, time, count)
 #endif
@@ -37,7 +36,7 @@ void add_value_to_sparse(gpointer coords, gpointer value, gpointer sp){
 }
 
 void print_ptr(gpointer ptr, gpointer userData){
-	//printf("Address: %p, Value: %p, Points to: %f\n", &ptr, ptr, *((double *)ptr));
+	printf("Address: %p, Value: %p, Points to: %f\n", &ptr, ptr, *((double *)ptr));
 }
 
 void free_memory(gpointer ptr, gpointer userData){
@@ -64,6 +63,7 @@ void convert_hashmap_to_sparse(GHashTable* hash, int m, int n, int NZ, COO* C){
 /* Computes C = A*B.
  * C should be allocated by this routine.
  */
+//VEC?
 int col_sort(const void *a, const void *b){
 	if(((int *)a)[1] < ((int *)b)[1]){
 		return -1;
@@ -99,6 +99,8 @@ void sort_coo(const COO A, COO* S, int compare(const void *, const void *)){
 	unsorted = malloc(nz * size);
 	head = unsorted;
 
+	//VEC - Loop/Unravell
+	//WASN'T VECTORISED
 	//Create array of arrays to be sorted
 	for(c; c < nz; c++){
 		*(int *)head = A->coords[c].i;
@@ -118,6 +120,8 @@ void sort_coo(const COO A, COO* S, int compare(const void *, const void *)){
 	c = 0;
 	head = unsorted;
 
+	//VEC - LoopUnravell
+	//WAS VECTORIZED
 	//Populate our sorted COO object
 	for(c; c < nz; c++){
 		sp->coords[c].i = *(int *)head;	
@@ -134,6 +138,8 @@ void sort_coo(const COO A, COO* S, int compare(const void *, const void *)){
 
 void optimised_sparsemm(COO A, COO B, COO *C)
 {
+	LIKWID_MARKER_START("Optimised Sparsemm Sum - Multiplication");
+	//LIKWID_MARKER_START("Optimised Sparsemm - Whole Function");
 	//printf("\n In OPTS\n");
 	//printf("A Data 1: %f\n", A->data[0]);
 	//printf("A Data 2: %f\n", A->data[1]);
@@ -149,7 +155,6 @@ void optimised_sparsemm(COO A, COO B, COO *C)
 	//printf("B Data 5: %f\n", B->data[4]);
 	//printf("B Data 6: %f\n", B->data[5]);
 	//printf("B Data 7: %f\n", B->data[6]);
-	LIKWID_MARKER_START("Optimised Sparsemm - Whole Function");
 	int a, b, nzA, nzB, nzC = 0, m, n, estimate, newEstimate, currentCol = 0, beginRow = 0;
 	double product, errorProp, *partial = NULL;
 	char coords[15];	//NOTE - this may be vulnerable to buffer of if mat large
@@ -179,16 +184,20 @@ void optimised_sparsemm(COO A, COO B, COO *C)
 	//Sort by row
 	sort_coo(B, &BS, row_sort);
 
+	//NOT VECTORISED - multiple nested loops
+	//SLP doesn't divide the vector size. Unknown alignment for acess
 	for(a = 0; a < nzA; a++){
 		//Move our b back down to the beginning of the row which matches our column
 		b = beginRow;
 
 		//Skip values in our A matrix until our a column matches our b row
+		//NOT VECTORISED - control flow in loop
 		while(a < nzA && AS->coords[a].j < BS->coords[b].i){
 			a++;
 		}
 
 		//Skip values in our B matrix until our b row matches our a column
+		//NOT VECTORISED - control flow in loop
 		while(b < nzB && BS->coords[b].i < AS->coords[a].j){
 			b++;
 		}
@@ -196,6 +205,7 @@ void optimised_sparsemm(COO A, COO B, COO *C)
 		beginRow = b;
 		currentCol = AS->coords[a].j;
 
+		//NOT VECTORISED - control flow in loop
 		while(b < nzB && BS->coords[b].i == currentCol){
 			product = AS->data[a] * BS->data[b];
 			//printf("A Data: %f, B Data: %f\n", AS->data[a], BS->data[a]);
@@ -227,8 +237,8 @@ void optimised_sparsemm(COO A, COO B, COO *C)
 
 	//LIKWID_MARKER_STOP("Optimised Sparsemm - Loops");
 	convert_hashmap_to_sparse(sparseC, m, n, nzC, C);
-	LIKWID_MARKER_STOP("Optimised Sparsemm - Whole Function");
-	g_ptr_array_foreach(memPtrs, print_ptr, NULL);
+	//LIKWID_MARKER_STOP("Optimised Sparsemm - Whole Function");
+	LIKWID_MARKER_STOP("Optimised Sparsemm Sum - Multiplication");
 	g_ptr_array_foreach(memPtrs, free_memory, NULL);
 	free_sparse(&AS);
 	free_sparse(&BS);
@@ -242,6 +252,7 @@ void optimised_sparsemm(COO A, COO B, COO *C)
  */
 void add_3(const COO A, const COO B, const COO C, COO *S){
 
+	LIKWID_MARKER_START("Optimised Sparsemm Sum - Addition");
 	int a, b, c, nzA, nzB, nzC, nzS, estimate, newEstimate;
 	double errorProp, value = 0.0, *partial = NULL;
 	char coords[15];	//NOTE - this may be vulnerable to buffer of if mat large
@@ -297,6 +308,7 @@ void add_3(const COO A, const COO B, const COO C, COO *S){
 		memPtr++;
 	}
 
+	//NOT VEC - control flow in loop
 	for(b = 0; b < mid->NZ; b++){
 		value = mid->data[b];
 		sprintf(coords, "%d,%d", mid->coords[b].i, mid->coords[b].j);
@@ -321,6 +333,7 @@ void add_3(const COO A, const COO B, const COO C, COO *S){
 		}
 	}
 
+	//NOT VEC - control flow in loop
 	for(c = 0; c < sml->NZ; c++){
 		value = sml->data[c];
 		sprintf(coords, "%d,%d", sml->coords[c].i, sml->coords[c].j);
@@ -350,10 +363,10 @@ void add_3(const COO A, const COO B, const COO C, COO *S){
 	//printf("S Data 0: %f\n", (*S)->data[0]);
 	//printf("S Data 1: %f\n", (*S)->data[1]);
 
-	g_ptr_array_foreach(memPtrs, print_ptr, NULL);
 	g_ptr_array_foreach(memPtrs, free_memory, NULL);
 	g_ptr_array_free(memPtrs, TRUE);
 	g_hash_table_destroy(sparseS);
+	LIKWID_MARKER_STOP("Optimised Sparsemm Sum - Addition");
 	return;
 }
 
