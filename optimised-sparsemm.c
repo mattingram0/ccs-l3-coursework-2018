@@ -253,121 +253,209 @@ void optimised_sparsemm(COO A, COO B, COO *C)
 void add_3(const COO A, const COO B, const COO C, COO *S){
 
 	LIKWID_MARKER_START("Optimised Sparsemm Sum - Addition");
-	int a, b, c, nzA, nzB, nzC, nzS, estimate, newEstimate;
-	double errorProp, value = 0.0, *partial = NULL;
-	char coords[15];	//NOTE - this may be vulnerable to buffer of if mat large
-	GHashTable* sparseS = g_hash_table_new(g_str_hash, g_str_equal);
-	COO big, mid, sml, temp;
-	COO order[3];
-	gchar *key;
-	gdouble *memPtr, *newPtr;
-	GPtrArray *memPtrs;
+	int a = 0, b = 0, c = 0, d = 0, e = 0, f = 0, ar, ac, br, bc, cr, cc, dr, dc, er, ec, fr, fc, nzA, nzB, nzC, nzD, nzE, nzF, nzS = 0;
+	double errorProp, estimate;
+    struct coord *coords, *tempCoords;
+    double *data, *tempData;
+	COO D, E, F, sp;
+
+	if(A->NZ > B->NZ && A->NZ > C->NZ){
+		estimate = A->NZ * 1.1;
+	}
+	else if (B->NZ > A->NZ && B->NZ > C->NZ){
+		estimate = B->NZ * 1.1;
+	}
+	else{
+		estimate = C->NZ * 1.1;
+	}	
+
+	//printf("\nInitial Estimation: %d\n", (int)estimate);
 
 	nzA = A->NZ;
 	nzB = B->NZ;
 	nzC = C->NZ;
 
-	memPtrs = g_ptr_array_new();
-	order[0] = A;
-	order[1] = B;
-	order[2] = C;
-	//printf("\nnzA: %d, nzB: %d, nzC: %d\n", order[0]->NZ, order[1]->NZ, order[2]->NZ);
+    coords = calloc((int) estimate, sizeof(struct coord));
+    data = calloc((int) estimate, sizeof(double));
+    //printf("\nAddition:\n");
+	
+	//Insert values until all of one matrix has been copied/added
+	//printf("Begin first loop\n");
+	while(a < nzA && b < nzB && c < nzC){
+		ar = A->coords[a].i;
+		ac = A->coords[a].j;
+		br = B->coords[b].i;
+		bc = B->coords[b].j;
+		cr = C->coords[c].i;
+		cc = C->coords[c].j;
 
-	if(order[0]->NZ > order[1]->NZ){
-		order[0] = B;
-		order[1] = A;
+		if((ar < br && ar < cr) || (ar == br && ar <= cr && ac < bc) || (ar == cr && ar <= br && ac < cc)){
+			coords[nzS].i = ar;
+			coords[nzS].j = ac;
+			data[nzS] = A->data[a];
+			a++;
+		}
+		else if((br < ar && br < cr) || (br == ar && br <= cr && bc < ac) || (br == cr && br <= ar && bc < cc)){
+			coords[nzS].i = br;
+			coords[nzS].j = bc;
+			data[nzS] = B->data[b];
+			b++;
+		}
+		else if((cr < ar && cr < br) || (cr == ar && cr <= br && cc < ac) || (cr == br && cr <= ar && cc < bc)){
+			coords[nzS].i = cr;
+			coords[nzS].j = cc;
+			data[nzS] = C->data[c];
+			c++;
+		}
+		else if((ar == br && ac == bc ) && (ar < cr || ac < cc)){
+			coords[nzS].i = ar;
+			coords[nzS].j = ac;
+			data[nzS] = A->data[a] + B->data[b];
+			a++;
+			b++;
+		}
+		else if((ar == cr && ac == cc) && (ar < br || ac < bc)){
+			coords[nzS].i = ar;
+			coords[nzS].j = ac;
+			data[nzS] = A->data[a] + C->data[c];
+			a++;
+			c++;
+		}
+		else if((br == cr && bc == cc) && (br < ar || bc < ac)){
+			coords[nzS].i = br;
+			coords[nzS].j = bc;
+			data[nzS] = B->data[b] + C->data[c];
+			b++;
+			c++;
+		}
+		else{
+			coords[nzS].i = ar;
+			coords[nzS].j = ac;
+			data[nzS] = A->data[a] + B->data[b] + C->data[c];
+			a++;
+			b++;
+			c++;
+		}
+		//printf("[%d, %d, %f]\n", coords[nzS].i, coords[nzS].j, data[nzS]);
+
+		nzS++;
+
+		if(nzS == (int)estimate){
+			estimate /= (((double)((double)a + (double)b + (double)c))/((double)((double)nzA + (double)nzB + (double)nzC)) - 0.01); 
+			//printf("\n1. Updated Estimation: %d\n", (int)estimate);
+    		tempCoords = realloc(coords, (int)estimate * sizeof(struct coord));
+    		tempData = realloc(data, (int)estimate * sizeof(double));
+    		coords = tempCoords;
+    		data = tempData;
+		}	
+	}
+	
+	if(a == A->NZ){
+		D = B;
+		d = b;
+		E = C;
+		e = c;
+	}
+	else if(b == B->NZ){
+		D = A;
+		d = a;
+		E = C;
+		e = c;
+	}
+	else{
+		D = A;
+		d = a;
+		E = B;
+		e = b;
 	}
 
-	if(order[0]->NZ > order[2]->NZ){
-		temp = order[0];
-		order[0] = order[2];
-		order[2] = temp;
+	nzD = D->NZ;
+	nzE = E->NZ;
+
+	//Insert values until all of the matrix of values have been inserted/added
+	//printf("\nBegin second loop\n");
+	while(d < nzD && e < nzE){
+		dr = D->coords[d].i;
+		dc = D->coords[d].j;
+		er = E->coords[e].i;
+		ec = E->coords[e].j;
+		
+		if((dr < er) || (dr == er && dc < ec)){
+			coords[nzS].i = dr;
+			coords[nzS].j = dc;
+			data[nzS] = D->data[d];
+			d++;
+		}
+		else if((er < dr) || (er == dr && ec < dc)){
+			coords[nzS].i = er;
+			coords[nzS].j = ec;
+			data[nzS] = E->data[e];
+			e++;
+		}
+		else{
+			coords[nzS].i = dr;
+			coords[nzS].j = dc;
+			data[nzS] = D->data[d] + E->data[e];
+			d++;
+			e++;
+		}
+		
+		//printf("[%d, %d, %f]\n", coords[nzS].i, coords[nzS].j, data[nzS]);
+		nzS++;
+
+		if(nzS == (int)estimate){
+			estimate /= (((double)((double)d + (double)e))/((double)((double)nzD + (double)nzE)) - 0.01); 
+			//printf("\n2. Updated Estimation: %d\n", (int)estimate);
+    		tempCoords = realloc(coords, (int)estimate * sizeof(struct coord));
+    		tempData = realloc(data, (int)estimate * sizeof(double));
+    		coords = tempCoords;
+    		data = tempData;
+    	}
 	}
 
-	if(order[1]->NZ > order[2]->NZ){
-		temp = order[1];
-		order[1] = order[2];
-		order[2] = temp;
+	if(d == D->NZ){
+		F = E;
+		f = e;
+	}
+	else{
+		F = D;
+		f = d;
 	}
 
-	big = order[2];
-	mid = order[1];
-	sml = order[0];
-	//printf("Big: %d, Medium: %d, Small: %d\n", big->NZ, mid->NZ, sml->NZ);
-	*S = NULL;
-	estimate = nzS = big->NZ;
-	memPtr = (double *) malloc(sizeof(double) * estimate); 
-	g_ptr_array_add(memPtrs, (gpointer)memPtr);	
+	nzF = F->NZ;
 
-	for(a = 0; a < big->NZ; a++){
-		value =	big->data[a];
-		sprintf(coords, "%d,%d", big->coords[a].i, big->coords[a].j);
-		key = g_strdup(coords);									  
-		*memPtr = value;
-		g_hash_table_insert(sparseS, key, memPtr);
-		memPtr++;
-	}
+	//Insert the remaining values from the last matrix
+	//printf("\nBegin third loop\n");
+	while(f < nzF){
+		coords[nzS].i = F->coords[f].i;
+		coords[nzS].j = F->coords[f].j;
+		data[nzS] = F->data[f];
+		f++;
+		
+		//printf("[%d, %d, %f]\n", coords[nzS].i, coords[nzS].j, data[nzS]);
 
-	//NOT VEC - control flow in loop
-	for(b = 0; b < mid->NZ; b++){
-		value = mid->data[b];
-		sprintf(coords, "%d,%d", mid->coords[b].i, mid->coords[b].j);
-		partial = (double *) g_hash_table_lookup(sparseS, coords);
-
-		if (partial == NULL){
-			if(nzS == estimate){ 
-				newEstimate = mid->NZ;
-				memPtr = (double *) malloc(sizeof(double) * newEstimate);
-				estimate += newEstimate;
-				g_ptr_array_add(memPtrs, (gpointer)memPtr);		
-			}
-
-			key = g_strdup(coords);									  
-			*memPtr = value;		
-			g_hash_table_insert(sparseS, key, memPtr);
-			
-			nzS++;
-			memPtr++;
-		} else {
-			*partial += value;
+		nzS++;
+		if(nzS == (int)estimate){
+			estimate /= (((double)f)/((double)nzF) - 0.01); 
+			//printf("\n3. Updated Estimation: %d\n", (int)estimate);
+    		tempCoords = realloc(coords, (int)estimate * sizeof(struct coord));
+    		tempData = realloc(data, (int)estimate * sizeof(double));
+    		coords = tempCoords;
+    		data = tempData;
 		}
 	}
 
-	//NOT VEC - control flow in loop
-	for(c = 0; c < sml->NZ; c++){
-		value = sml->data[c];
-		sprintf(coords, "%d,%d", sml->coords[c].i, sml->coords[c].j);
-		partial = (double *) g_hash_table_lookup(sparseS, coords);
-
-		if (partial == NULL){
-			if(nzS == estimate){ 
-				newEstimate = sml->NZ;
-				memPtr = (double *) malloc(sizeof(double) * newEstimate);
-				estimate += newEstimate;
-				g_ptr_array_add(memPtrs, (gpointer)memPtr);		
-			}
-
-			key = g_strdup(coords);									  
-			*memPtr = value;		
-			g_hash_table_insert(sparseS, key, memPtr);
-
-			nzS++;
-			memPtr++;
-		} else {
-			*partial += value;
-		}
-	}
-
-	convert_hashmap_to_sparse(sparseS, A->m, A->n, nzS, S);
-	//printf("\n Post Convert Data \n");
-	//printf("S Data 0: %f\n", (*S)->data[0]);
-	//printf("S Data 1: %f\n", (*S)->data[1]);
-
-	g_ptr_array_foreach(memPtrs, free_memory, NULL);
-	g_ptr_array_free(memPtrs, TRUE);
-	g_hash_table_destroy(sparseS);
-	LIKWID_MARKER_STOP("Optimised Sparsemm Sum - Addition");
+	alloc_sparse(A->m, A->n, nzS, &sp);
+	sp->m = A->m;
+	sp->n = A->n;
+	sp->NZ = nzS;
+	sp->coords = coords;
+	sp->data = data;
+	
+	*S = sp;
+	//printf("\n");
 	return;
+	LIKWID_MARKER_STOP("Optimised Sparsemm Sum - Addition");
 }
 
 void optimised_sparsemm_sum(const COO A, const COO B, const COO C,
