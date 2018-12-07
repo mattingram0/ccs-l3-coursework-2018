@@ -89,7 +89,7 @@ int row_sort(const void *a, const void *b){
 	}
 }
 
-void sort_coo(const COO A, COO* S, int compare(const void *, const void *)){
+void sort_coo(const COO A, COO* S, int compare(const void *, const void *), int* rowList){
 	int nz, size, c, k, diff, currRow, IA[A->NZ];
 	void *unsorted, *head;
 	COO sp;
@@ -132,7 +132,7 @@ void sort_coo(const COO A, COO* S, int compare(const void *, const void *)){
 		sp->data[c] = *(double *)head;
 		head = (double *)head + 1;
 
-		//VECTORIZE??? NOTE
+		//VECTORIZE??? NOTE - SPLIT INTO SEPARATE FUNCTION, may actually improve performance using SIMD
 		diff = sp->coords[c].i - currRow;
 		for(k = 0; k < diff; k++){
 			IA[currRow + k + 1] = c;	
@@ -140,12 +140,9 @@ void sort_coo(const COO A, COO* S, int compare(const void *, const void *)){
 		currRow += diff;
 	}
 
-	printf("\nIA:\n[");
-
-	for(k = 0; k < A->m; k++){
-		printf("%d ", IA[k]);
+	if(rowList != NULL){
+		rowList = IA;
 	}
-	printf("]\n");
 
 	*S = sp;
 	return;
@@ -170,7 +167,7 @@ void optimised_sparsemm(COO A, COO B, COO *C)
 	//printf("B Data 5: %f\n", B->data[4]);
 	//printf("B Data 6: %f\n", B->data[5]);
 	//printf("B Data 7: %f\n", B->data[6]);
-	int a, b, nzA, nzB, nzC = 0, m, n, estimate, newEstimate, currentCol = 0, beginRow = 0;
+	int a, b, nzA, nzB, nzC = 0, m, n, estimate, newEstimate, currentCol = 0, beginRow = 0, *IA;
 	double product, errorProp, *partial = NULL;
 	char coords[15];	//NOTE - this may be vulnerable to buffer of if mat large
 	GHashTable* sparseC = g_hash_table_new(g_str_hash, g_str_equal);
@@ -195,11 +192,11 @@ void optimised_sparsemm(COO A, COO B, COO *C)
 	g_ptr_array_add(memPtrs, (gpointer)memPtr);	
 
 	//Sort by column, freeing our old matrix, then setting A to our sorted matrix to ensure it gets freed later in sparsemm.c
-	printf("\nA Column Sort");
-	sort_coo(A, &AS, col_sort);
-	//Sort by row
-	printf("\nB Row Sort");
-	sort_coo(B, &BS, row_sort);
+	//printf("\nA Column Sort");
+	sort_coo(A, &AS, col_sort, NULL);
+	//Sort by row, passing our row list (IA) integer array pointer so that the sort function also returns our row list
+	//printf("\nB Row Sort");
+	sort_coo(B, &BS, row_sort, IA);
 
 	//NOT VECTORISED - multiple nested loops
 	//SLP doesn't divide the vector size. Unknown alignment for acess
@@ -220,8 +217,8 @@ void optimised_sparsemm(COO A, COO B, COO *C)
 			b++;
 		}
 
-		//beginRow = b;
-		//currentCol = AS->coords[a].j;
+		beginRow = b;
+		currentCol = AS->coords[a].j;
 		//val = AS->data[a];
 
 		//get AS->data[a] and store in a variable
