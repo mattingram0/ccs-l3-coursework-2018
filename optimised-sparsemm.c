@@ -10,7 +10,8 @@
 #define LIKWID_MARKER_THREADINIT
 #define LIKWID_MARKER_SWITCH
 #define LIKWID_MARKER_REGISTER(regionTag)
-
+#define LIKWID_MARKER_START(regionTag)
+#define LIKWID_MARKER_STOP(regionTag)
 #define LIKWID_MARKER_CLOSE
 #define LIKWID_MARKER_GET(regionTag, nevents, events, time, count)
 #endif
@@ -89,7 +90,7 @@ int row_sort(const void *a, const void *b){
 }
 
 void sort_coo(const COO A, COO* S, int compare(const void *, const void *)){
-	int nz, size, c;
+	int nz, size, c, k, diff, currRow, IA[A->NZ];
 	void *unsorted, *head;
 	COO sp;
 	nz = A->NZ;
@@ -117,9 +118,9 @@ void sort_coo(const COO A, COO* S, int compare(const void *, const void *)){
 	//Allocate a new sparse COO object
 	alloc_sparse(A->m, A->n, nz, &sp);
 
-	c = 0;
+	c = currRow = 0;
 	head = unsorted;
-
+	IA[0] = 0;
 	//VEC - LoopUnravell
 	//WAS VECTORIZED
 	//Populate our sorted COO object
@@ -130,7 +131,21 @@ void sort_coo(const COO A, COO* S, int compare(const void *, const void *)){
 		head = (int *)head + 1;
 		sp->data[c] = *(double *)head;
 		head = (double *)head + 1;
+
+		//VECTORIZE??? NOTE
+		diff = sp->coords[c].i - currRow;
+		for(k = 0; k < diff; k++){
+			IA[currRow + k + 1] = c;	
+		}
+		currRow += diff;
 	}
+
+	printf("\nIA:\n[");
+
+	for(k = 0; k < A->m; k++){
+		printf("%d ", IA[k]);
+	}
+	printf("]\n");
 
 	*S = sp;
 	return;
@@ -180,8 +195,10 @@ void optimised_sparsemm(COO A, COO B, COO *C)
 	g_ptr_array_add(memPtrs, (gpointer)memPtr);	
 
 	//Sort by column, freeing our old matrix, then setting A to our sorted matrix to ensure it gets freed later in sparsemm.c
+	printf("\nA Column Sort");
 	sort_coo(A, &AS, col_sort);
 	//Sort by row
+	printf("\nB Row Sort");
 	sort_coo(B, &BS, row_sort);
 
 	//NOT VECTORISED - multiple nested loops
@@ -203,10 +220,23 @@ void optimised_sparsemm(COO A, COO B, COO *C)
 			b++;
 		}
 
-		beginRow = b;
-		currentCol = AS->coords[a].j;
+		//beginRow = b;
+		//currentCol = AS->coords[a].j;
+		//val = AS->data[a];
 
-		//NOT VECTORISED - control flow in loop
+		//get AS->data[a] and store in a variable
+		//for element in the coloum
+		//	get its data and store in an array 
+		//	pad???
+		//	gett is i index and store in an array
+		//	get its j index and store in an array too
+		//
+		//Vectorised loop:
+		//	add the AS->data[a] to every element in the row
+
+		//for element in the column
+		//	perform the usual checking to see if the element is in our hash table and insert/update
+		////NOT VECTORISED - control flow in loop
 		while(b < nzB && BS->coords[b].i == currentCol){
 			//LIKWID_MARKER_START("Optimised Sparsemm - Product");
 			product = AS->data[a] * BS->data[b];

@@ -39,10 +39,12 @@ static int check_sparsemm()
     int i, j, m, n, k;
     int pass = 0;
 
-    m = 20;
-    k = 50;
-    n = 30;
+    m = 7;
+    k = 9;
+    n = 5;
+    printf("A:\n");
     random_matrix(m, k, 0.1, &A); //creates random m x k matrix 
+    printf("B:\n");
     random_matrix(k, n, 0.2, &B); //creates random k x n matrix
 	
     basic_sparsemm(A, B, &Cbasic); //basic matrix matrix multiplication
@@ -150,8 +152,8 @@ int main(int argc, char **argv)
             fprintf(stderr, "Invalid mode, expecting CHECK, got %s\n", argv[1]);
             return 1;
         }
-//      pass |= check_sparsemm();
-        pass |= check_sparsemm_sum();
+		pass |= check_sparsemm();
+        //pass |= check_sparsemm_sum();
         
         //printf("%d", pass);
         return pass;
