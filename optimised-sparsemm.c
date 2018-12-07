@@ -138,8 +138,8 @@ void sort_coo(const COO A, COO* S, int compare(const void *, const void *)){
 
 void optimised_sparsemm(COO A, COO B, COO *C)
 {
-	LIKWID_MARKER_START("Optimised Sparsemm Sum - Multiplication");
-	//LIKWID_MARKER_START("Optimised Sparsemm - Whole Function");
+//	LIKWID_MARKER_START("Optimised Sparsemm Sum - Multiplication");
+	LIKWID_MARKER_START("Optimised Sparsemm - Whole Function");
 	//printf("\n In OPTS\n");
 	//printf("A Data 1: %f\n", A->data[0]);
 	//printf("A Data 2: %f\n", A->data[1]);
@@ -186,6 +186,7 @@ void optimised_sparsemm(COO A, COO B, COO *C)
 
 	//NOT VECTORISED - multiple nested loops
 	//SLP doesn't divide the vector size. Unknown alignment for acess
+	LIKWID_MARKER_START("Optimised Sparsemm - Loops");
 	for(a = 0; a < nzA; a++){
 		//Move our b back down to the beginning of the row which matches our column
 		b = beginRow;
@@ -207,7 +208,10 @@ void optimised_sparsemm(COO A, COO B, COO *C)
 
 		//NOT VECTORISED - control flow in loop
 		while(b < nzB && BS->coords[b].i == currentCol){
+			//LIKWID_MARKER_START("Optimised Sparsemm - Product");
 			product = AS->data[a] * BS->data[b];
+			//LIKWID_MARKER_STOP("Optimised Sparsemm - Product");
+
 			//printf("A Data: %f, B Data: %f\n", AS->data[a], BS->data[a]);
 			sprintf(coords, "%d,%d", AS->coords[a].i, BS->coords[b].j);
 			partial = (double *) g_hash_table_lookup(sparseC, coords);
@@ -235,14 +239,15 @@ void optimised_sparsemm(COO A, COO B, COO *C)
 		}
 	}
 
-	//LIKWID_MARKER_STOP("Optimised Sparsemm - Loops");
+	LIKWID_MARKER_STOP("Optimised Sparsemm - Loops");
 	convert_hashmap_to_sparse(sparseC, m, n, nzC, C);
 	//LIKWID_MARKER_STOP("Optimised Sparsemm - Whole Function");
-	LIKWID_MARKER_STOP("Optimised Sparsemm Sum - Multiplication");
+//	LIKWID_MARKER_STOP("Optimised Sparsemm Sum - Multiplication");
 	g_ptr_array_foreach(memPtrs, free_memory, NULL);
 	free_sparse(&AS);
 	free_sparse(&BS);
 	g_hash_table_destroy(sparseC);
+	LIKWID_MARKER_STOP("Optimised Sparsemm - Whole Function");
 	return;
 }
 
@@ -252,7 +257,6 @@ void optimised_sparsemm(COO A, COO B, COO *C)
  */
 void add_3(const COO A, const COO B, const COO C, COO *S){
 
-	LIKWID_MARKER_START("Optimised Sparsemm Sum - Addition");
 	int a = 0, b = 0, c = 0, d = 0, e = 0, f = 0, ar, ac, br, bc, cr, cc, dr, dc, er, ec, fr, fc, nzA, nzB, nzC, nzD, nzE, nzF, nzS = 0;
 	double errorProp, estimate;
     struct coord *coords, *tempCoords;
@@ -281,6 +285,7 @@ void add_3(const COO A, const COO B, const COO C, COO *S){
 	
 	//Insert values until all of one matrix has been copied/added
 	//printf("Begin first loop\n");
+	#pragma GCC ivdep
 	while(a < nzA && b < nzB && c < nzC){
 		ar = A->coords[a].i;
 		ac = A->coords[a].j;
@@ -455,16 +460,19 @@ void add_3(const COO A, const COO B, const COO C, COO *S){
 	*S = sp;
 	//printf("\n");
 	return;
-	LIKWID_MARKER_STOP("Optimised Sparsemm Sum - Addition");
+	
 }
 
 void optimised_sparsemm_sum(const COO A, const COO B, const COO C,
 		const COO D, const COO E, const COO F,
 		COO *O)
 {
+	//LIKWID_MARKER_START("Optimised Sparsemm Sum - Whole Function");
 	COO sum1, sum2;
 	//printf("\nA + B + C");
+//	LIKWID_MARKER_START("Optimised Sparsemm Sum - First Addition");
 	add_3(A, B, C, &sum1);
+//	LIKWID_MARKER_STOP("Optimised Sparsemm Sum - First Addition");
 //	//printf("Sum1 Data 1: %f\n", sum1->data[0]);
 //	printf("Sum1 Data 2: %f\n", sum1->data[1]);
 //	printf("Sum1 Data 3: %f\n", sum1->data[2]);
@@ -474,7 +482,9 @@ void optimised_sparsemm_sum(const COO A, const COO B, const COO C,
 //	printf("Sum1 Data 7: %f\n", sum1->data[6]);
 //
 	//printf("\nD + E + F");
+//	LIKWID_MARKER_START("Optimised Sparsemm Sum - Second Addition");
 	add_3(D, E, F, &sum2);
+//	LIKWID_MARKER_STOP("Optimised Sparsemm Sum - Second Addition");
 	//printf("Sum2 Data 1: %f\n", sum2->data[0]);
 	//printf("Sum2 Data 2: %f\n", sum2->data[1]);
 	//printf("Sum2 Data 3: %f\n", sum2->data[2]);
@@ -483,6 +493,9 @@ void optimised_sparsemm_sum(const COO A, const COO B, const COO C,
 	//printf("Sum2 Data 6: %f\n", sum2->data[5]);
 	//printf("Sum2 Data 7: %f\n", sum2->data[6]);
 	//printf("\nD + E + F");
+//	LIKWID_MARKER_START("Optimised Sparsemm Sum - Multiplication");
 	optimised_sparsemm(sum1, sum2, O);
+//	LIKWID_MARKER_STOP("Optimised Sparsemm Sum - Multiplication");
+	//LIKWID_MARKER_STOP("Optimised Sparsemm Sum - Whole Function");
 	return;
 }
