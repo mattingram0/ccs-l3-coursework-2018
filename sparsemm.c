@@ -150,7 +150,7 @@ int main(int argc, char **argv)
             fprintf(stderr, "Invalid mode, expecting CHECK, got %s\n", argv[1]);
             return 1;
         }
-//      pass |= check_sparsemm();
+	    pass |= check_sparsemm();
         pass |= check_sparsemm_sum();
         
         //printf("%d", pass);
