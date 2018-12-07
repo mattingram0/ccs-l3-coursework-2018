@@ -39,9 +39,9 @@ static int check_sparsemm()
     int i, j, m, n, k;
     int pass = 0;
 
-    m = 7;
-    k = 9;
-    n = 5;
+    m = 35;
+    k = 47;
+    n = 53;
     printf("A:\n");
     random_matrix(m, k, 0.1, &A); //creates random m x k matrix 
     printf("B:\n");
@@ -154,8 +154,13 @@ int main(int argc, char **argv)
         }
 		pass |= check_sparsemm();
         //pass |= check_sparsemm_sum();
-        
-        //printf("%d", pass);
+       
+       	if(pass == 0){
+       		printf("Passed");
+       	}else{
+        	printf("Failed");
+        }
+
         return pass;
     } else if (argc == 4) {
         COO A, B;

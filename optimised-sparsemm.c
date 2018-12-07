@@ -89,8 +89,9 @@ int row_sort(const void *a, const void *b){
 	}
 }
 
-void sort_coo(const COO A, COO* S, int compare(const void *, const void *), int* rowList){
-	int nz, size, c, k, diff, currRow, IA[A->NZ];
+void sort_coo(const COO A, COO* S, int compare(const void *, const void *), int** rowList){
+	int nz, size, c, k, diff, currRow;
+	int	*IA = (int *)malloc((A->m + 1) * sizeof(int));
 	void *unsorted, *head;
 	COO sp;
 	nz = A->NZ;
@@ -131,6 +132,7 @@ void sort_coo(const COO A, COO* S, int compare(const void *, const void *), int*
 		head = (int *)head + 1;
 		sp->data[c] = *(double *)head;
 		head = (double *)head + 1;
+		printf("[%d, %d, %f]\n", sp->coords[c].i, sp->coords[c].j, sp->data[c]);
 
 		//VECTORIZE??? NOTE - SPLIT INTO SEPARATE FUNCTION, may actually improve performance using SIMD
 		diff = sp->coords[c].i - currRow;
@@ -140,9 +142,16 @@ void sort_coo(const COO A, COO* S, int compare(const void *, const void *), int*
 		currRow += diff;
 	}
 
-	if(rowList != NULL){
-		rowList = IA;
+	IA[A->m] = nz;
+	*rowList = IA;
+	int z = 0;
+
+	printf("\n");
+
+	for(z; z < A->m + 1; z++){
+		printf("%d ,", IA[z]);
 	}
+	printf("\n");
 
 	*S = sp;
 	return;
@@ -153,21 +162,7 @@ void optimised_sparsemm(COO A, COO B, COO *C)
 //	LIKWID_MARKER_START("Optimised Sparsemm Sum - Multiplication");
 	LIKWID_MARKER_START("Optimised Sparsemm - Whole Function");
 	//printf("\n In OPTS\n");
-	//printf("A Data 1: %f\n", A->data[0]);
-	//printf("A Data 2: %f\n", A->data[1]);
-	//printf("A Data 3: %f\n", A->data[2]);
-	//printf("A Data 4: %f\n", A->data[3]);
-	//printf("A Data 5: %f\n", A->data[4]);
-	//printf("A Data 6: %f\n", A->data[5]);
-	//printf("A Data 7: %f\n", A->data[6]);
-	//printf("B Data 1: %f\n", B->data[0]);
-	//printf("B Data 2: %f\n", B->data[1]);
-	//printf("B Data 3: %f\n", B->data[2]);
-	//printf("B Data 4: %f\n", B->data[3]);
-	//printf("B Data 5: %f\n", B->data[4]);
-	//printf("B Data 6: %f\n", B->data[5]);
-	//printf("B Data 7: %f\n", B->data[6]);
-	int a, b, nzA, nzB, nzC = 0, m, n, estimate, newEstimate, currentCol = 0, beginRow = 0, *IA;
+	int a, b, nzA, nzB, nzC = 0, m, n, estimate, newEstimate, currentCol = 0, beginRow = 0, *rowList; //TEST THIS - setting rowList = 0 is poor practice
 	double product, errorProp, *partial = NULL;
 	char coords[15];	//NOTE - this may be vulnerable to buffer of if mat large
 	GHashTable* sparseC = g_hash_table_new(g_str_hash, g_str_equal);
@@ -192,16 +187,23 @@ void optimised_sparsemm(COO A, COO B, COO *C)
 	g_ptr_array_add(memPtrs, (gpointer)memPtr);	
 
 	//Sort by column, freeing our old matrix, then setting A to our sorted matrix to ensure it gets freed later in sparsemm.c
-	//printf("\nA Column Sort");
-	sort_coo(A, &AS, col_sort, NULL);
-	//Sort by row, passing our row list (IA) integer array pointer so that the sort function also returns our row list
-	//printf("\nB Row Sort");
-	sort_coo(B, &BS, row_sort, IA);
+	printf("A Column Sort\n");
+	sort_coo(A, &AS, col_sort, &rowList);
+	//Sort by row, passing our row list (rowList) integer array pointer so that the sort function also returns our row list
+	printf("B Row Sort\n");
+	sort_coo(B, &BS, row_sort, &rowList);
 
 	//NOT VECTORISED - multiple nested loops
 	//SLP doesn't divide the vector size. Unknown alignment for acess
 	LIKWID_MARKER_START("Optimised Sparsemm - Loops");
+	
+	//Recently added local variables
+	int endRow = 0, l = 0;
+	double aVal, *bProducts;
+	//printf("%d\n", nzB + 1);
+
 	for(a = 0; a < nzA; a++){
+		//printf("a %d\n", a);
 		//Move our b back down to the beginning of the row which matches our column
 		b = beginRow;
 
@@ -218,54 +220,52 @@ void optimised_sparsemm(COO A, COO B, COO *C)
 		}
 
 		beginRow = b;
-		currentCol = AS->coords[a].j;
-		//val = AS->data[a];
+		aVal = AS->data[a];
+		//printf("BS->coords[b].i + 1: %d\n", BS->coords[b].i + 1);
+		endRow = rowList[BS->coords[b].i + 1];
+		bProducts = malloc((endRow - beginRow) * sizeof(double));
+		
+		//Pad/Vec
+		//printf("b: %d\n", b);
+		l = 0;
 
-		//get AS->data[a] and store in a variable
-		//for element in the coloum
-		//	get its data and store in an array 
-		//	pad???
-		//	gett is i index and store in an array
-		//	get its j index and store in an array too
-		//
-		//Vectorised loop:
-		//	add the AS->data[a] to every element in the row
+		for(b; b < endRow; b++){
+			bProducts[l] = aVal * B->data[b];
+	//		printf("%f * %f = %f\n", aVal, B->data[b], bProducts[l]);
+			l++;
+		}
 
-		//for element in the column
-		//	perform the usual checking to see if the element is in our hash table and insert/update
-		////NOT VECTORISED - control flow in loop
-		while(b < nzB && BS->coords[b].i == currentCol){
-			//LIKWID_MARKER_START("Optimised Sparsemm - Product");
-			product = AS->data[a] * BS->data[b];
-			//LIKWID_MARKER_STOP("Optimised Sparsemm - Product");
+		l = 0;
+		b = beginRow;
 
-			//printf("A Data: %f, B Data: %f\n", AS->data[a], BS->data[a]);
+		//Store in Hash Table - ugly and inefficient
+		for(b; b < endRow; b++){
 			sprintf(coords, "%d,%d", AS->coords[a].i, BS->coords[b].j);
 			partial = (double *) g_hash_table_lookup(sparseC, coords);
 
 			if(partial == NULL){ 
-				if(nzC == estimate){ 
-					errorProp = ((double)nzA * (double)nzB - (((double)a * (double)nzB) + (double)b))/(((double)a * (double)nzB) + (double)b);
-					newEstimate = (int)(errorProp * estimate);
-					memPtr = (double *) malloc(sizeof(double) * newEstimate);
-					estimate += newEstimate;
-					g_ptr_array_add(memPtrs, (gpointer)memPtr);		
-				}
-
 				key = g_strdup(coords);									  
-				*memPtr = product;		
-
+				*memPtr = bProducts[l];		
 				g_hash_table_insert(sparseC, key, memPtr);
 				nzC++;
 				memPtr++;
 			}else{
-				*partial += product;
+				*partial += bProducts[l];
 			}
-
-			b++;	
+			l++;
+		}
+		
+		//If we have run out of memory, allocate more, proportionally to how far we are through our loops
+		if(nzC == estimate){ 
+			errorProp = ((double)nzA * (double)nzB - (((double)a * (double)nzB) + (double)b))/(((double)a * (double)nzB) + (double)b);
+			newEstimate = (int)(errorProp * estimate);
+			memPtr = (double *) malloc(sizeof(double) * newEstimate);
+			estimate += newEstimate;
+			g_ptr_array_add(memPtrs, (gpointer)memPtr);		
 		}
 	}
-
+	printf("Finished Loops");
+	
 	LIKWID_MARKER_STOP("Optimised Sparsemm - Loops");
 	convert_hashmap_to_sparse(sparseC, m, n, nzC, C);
 	//LIKWID_MARKER_STOP("Optimised Sparsemm - Whole Function");

@@ -84,6 +84,7 @@ void basic_sparsemm(const COO A, const COO B, COO *C)
 
 		free_dense(&a);
 		free_dense(&b);
+//		printf("Basic Output:\n");
 		convert_dense_to_sparse(c, m, n, C);
 		free_dense(&c);
 		//LIKWID_MARKER_STOP("BasicSMM");
