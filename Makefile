@@ -10,7 +10,7 @@ LIKWID_FLAGS = -llikwid -lm
 GLIB_FLAGS = `pkg-config --cflags --libs glib-2.0`
 LDFLAGS = -lm
 CC = gcc
-VEC_FLAGS = -fopt-info-missed-loop
+VEC_FLAGS = -fopt-info-optimized
 
 #Variable to test if we are profiling:
 PROFILE = false

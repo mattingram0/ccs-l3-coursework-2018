@@ -90,7 +90,7 @@ int row_sort(const void *a, const void *b){
 }
 
 void sort_coo(const COO A, COO* S, int compare(const void *, const void *), int** rowList){
-	int nz, size, c, k, diff, currRow;
+	int nz, size, c, k, diff, currRow, smallestRowLength = INT_MAX;
 	int	*IA = (int *)malloc((A->m + 1) * sizeof(int));
 	void *unsorted, *head;
 	COO sp;
@@ -132,12 +132,18 @@ void sort_coo(const COO A, COO* S, int compare(const void *, const void *), int*
 		head = (int *)head + 1;
 		sp->data[c] = *(double *)head;
 		head = (double *)head + 1;
-		printf("[%d, %d, %f]\n", sp->coords[c].i, sp->coords[c].j, sp->data[c]);
+		//printf("[%d, %d, %f]\n", sp->coords[c].i, sp->coords[c].j, sp->data[c]);
 
 		//VECTORIZE??? NOTE - SPLIT INTO SEPARATE FUNCTION, may actually improve performance using SIMD
 		diff = sp->coords[c].i - currRow;
 		for(k = 0; k < diff; k++){
 			IA[currRow + k + 1] = c;	
+		}
+
+		if(diff > 0){
+			if(IA[currRow + diff] - IA[currRow] < smallestRowLength){
+				smallestRowLength = IA[currRow + diff] - IA[currRow];
+			}
 		}
 		currRow += diff;
 	}
@@ -146,13 +152,14 @@ void sort_coo(const COO A, COO* S, int compare(const void *, const void *), int*
 	*rowList = IA;
 	int z = 0;
 
-	printf("\n");
+	//printf("\n");
 
 	for(z; z < A->m + 1; z++){
-		printf("%d ,", IA[z]);
+		//printf("%d ,", IA[z]);
 	}
-	printf("\n");
-
+	//printf("\n");
+	printf("Smallest Row Length: %d\n", smallestRowLength);
+	free(unsorted);
 	*S = sp;
 	return;
 }
@@ -187,51 +194,63 @@ void optimised_sparsemm(COO A, COO B, COO *C)
 	g_ptr_array_add(memPtrs, (gpointer)memPtr);	
 
 	//Sort by column, freeing our old matrix, then setting A to our sorted matrix to ensure it gets freed later in sparsemm.c
-	printf("A Column Sort\n");
+	//printf("\nA + B + C: Column Sorted\n");
 	sort_coo(A, &AS, col_sort, &rowList);
 	//Sort by row, passing our row list (rowList) integer array pointer so that the sort function also returns our row list
-	printf("B Row Sort\n");
+	//printf("\nD + E: Row Sorted\n");
 	sort_coo(B, &BS, row_sort, &rowList);
 
 	//NOT VECTORISED - multiple nested loops
 	//SLP doesn't divide the vector size. Unknown alignment for acess
-	LIKWID_MARKER_START("Optimised Sparsemm - Loops");
+	LIKWID_MARKER_START("Multiplication");
 	
 	//Recently added local variables
 	int endRow = 0, l = 0;
 	double aVal, *bProducts;
-	//printf("%d\n", nzB + 1);
+	////printf("%d\n", nzB + 1);
 
 	for(a = 0; a < nzA; a++){
 		//printf("a %d\n", a);
 		//Move our b back down to the beginning of the row which matches our column
-		b = beginRow;
 
-		//Skip values in our A matrix until our a column matches our b row
-		//NOT VECTORISED - control flow in loop
-		while(a < nzA && AS->coords[a].j < BS->coords[b].i){
-			a++;
+		b = beginRow;
+		//printf("Before Corrections: a: %d, b: %d\n",a, b);
+		//TEST
+		while(BS->coords[b].i != AS->coords[a].j && b < nzB && a < nzA){
+			while(BS->coords[b].i < AS->coords[a].j && b < nzB && a < nzA)
+				b++;
+			while(AS->coords[a].j < BS->coords[b].i && b < nzB && a < nzA)
+				a++;
 		}
+
+		if(a == nzA || b == nzB)
+			break;
 
 		//Skip values in our B matrix until our b row matches our a column
 		//NOT VECTORISED - control flow in loop
-		while(b < nzB && BS->coords[b].i < AS->coords[a].j){
-			b++;
-		}
+		//while(b < nzB && BS->coords[b].i < AS->coords[a].j){
+//			b++;
+//		}
+//		//Skip values in our A matrix until our a column matches our b row
+//		//NOT VECTORISED - control flow in loop
+//		while(a < nzA && AS->coords[a].j < BS->coords[b].i){
+//			a++;
+//		}
+//
 
 		beginRow = b;
 		aVal = AS->data[a];
+		//printf("After Corrections: a: %d, b: %d\n",a, b);
 		//printf("BS->coords[b].i + 1: %d\n", BS->coords[b].i + 1);
 		endRow = rowList[BS->coords[b].i + 1];
 		bProducts = malloc((endRow - beginRow) * sizeof(double));
 		
 		//Pad/Vec
-		//printf("b: %d\n", b);
 		l = 0;
 
 		for(b; b < endRow; b++){
 			bProducts[l] = aVal * B->data[b];
-	//		printf("%f * %f = %f\n", aVal, B->data[b], bProducts[l]);
+			//printf("%f * %f = %f\n", aVal, B->data[b], bProducts[l]);
 			l++;
 		}
 
@@ -244,6 +263,13 @@ void optimised_sparsemm(COO A, COO B, COO *C)
 			partial = (double *) g_hash_table_lookup(sparseC, coords);
 
 			if(partial == NULL){ 
+				if(nzC == estimate){ 
+					errorProp = ((double)nzA * (double)nzB - (((double)a * (double)nzB) + (double)b))/(((double)a * (double)nzB) + (double)b);
+					newEstimate = (int)(errorProp * estimate);
+					memPtr = (double *) malloc(sizeof(double) * newEstimate);
+					estimate += newEstimate;
+					g_ptr_array_add(memPtrs, (gpointer)memPtr);		
+				}
 				key = g_strdup(coords);									  
 				*memPtr = bProducts[l];		
 				g_hash_table_insert(sparseC, key, memPtr);
@@ -254,19 +280,14 @@ void optimised_sparsemm(COO A, COO B, COO *C)
 			}
 			l++;
 		}
-		
+		//printf("\n");
+		free(bProducts);
+		//printf("\n");	
 		//If we have run out of memory, allocate more, proportionally to how far we are through our loops
-		if(nzC == estimate){ 
-			errorProp = ((double)nzA * (double)nzB - (((double)a * (double)nzB) + (double)b))/(((double)a * (double)nzB) + (double)b);
-			newEstimate = (int)(errorProp * estimate);
-			memPtr = (double *) malloc(sizeof(double) * newEstimate);
-			estimate += newEstimate;
-			g_ptr_array_add(memPtrs, (gpointer)memPtr);		
-		}
 	}
-	printf("Finished Loops");
+	//printf("Finished Loops");
 	
-	LIKWID_MARKER_STOP("Optimised Sparsemm - Loops");
+	LIKWID_MARKER_STOP("Multiplication");
 	convert_hashmap_to_sparse(sparseC, m, n, nzC, C);
 	//LIKWID_MARKER_STOP("Optimised Sparsemm - Whole Function");
 //	LIKWID_MARKER_STOP("Optimised Sparsemm Sum - Multiplication");
@@ -284,6 +305,7 @@ void optimised_sparsemm(COO A, COO B, COO *C)
  */
 void add_3(const COO A, const COO B, const COO C, COO *S){
 
+	LIKWID_MARKER_START("Addition");
 	int a = 0, b = 0, c = 0, d = 0, e = 0, f = 0, ar, ac, br, bc, cr, cc, dr, dc, er, ec, fr, fc, nzA, nzB, nzC, nzD, nzE, nzF, nzS = 0;
 	double errorProp, estimate;
     struct coord *coords, *tempCoords;
@@ -308,11 +330,10 @@ void add_3(const COO A, const COO B, const COO C, COO *S){
 
     coords = calloc((int) estimate, sizeof(struct coord));
     data = calloc((int) estimate, sizeof(double));
-    //printf("\nAddition:\n");
+    //printf("\nAddition:");
 	
 	//Insert values until all of one matrix has been copied/added
 	//printf("Begin first loop\n");
-	#pragma GCC ivdep
 	while(a < nzA && b < nzB && c < nzC){
 		ar = A->coords[a].i;
 		ac = A->coords[a].j;
@@ -321,25 +342,29 @@ void add_3(const COO A, const COO B, const COO C, COO *S){
 		cr = C->coords[c].i;
 		cc = C->coords[c].j;
 
-		if((ar < br && ar < cr) || (ar == br && ar <= cr && ac < bc) || (ar == cr && ar <= br && ac < cc)){
+		if((ar < br && ar < cr) || (ar == br && ar < cr && ac < bc) || (ar == cr && ar < br && ac < cc) || (ar == br && ar == cr && ac < bc && ac < cc)){
+			//printf("a: %d, b: %d, c: %d, a\n", a, b, c);
 			coords[nzS].i = ar;
 			coords[nzS].j = ac;
 			data[nzS] = A->data[a];
 			a++;
 		}
-		else if((br < ar && br < cr) || (br == ar && br <= cr && bc < ac) || (br == cr && br <= ar && bc < cc)){
+		else if((br < ar && br < cr) || (br == ar && br < cr && bc < ac) || (br == cr && br < ar && bc < cc) || (ar == br && ar == cr && bc < ac && bc < cc)){
+			//printf("a: %d, b: %d, c: %d, b\n", a, b, c);
 			coords[nzS].i = br;
 			coords[nzS].j = bc;
 			data[nzS] = B->data[b];
 			b++;
 		}
-		else if((cr < ar && cr < br) || (cr == ar && cr <= br && cc < ac) || (cr == br && cr <= ar && cc < bc)){
+		else if((cr < ar && cr < br) || (cr == ar && cr < br && cc < ac) || (cr == br && cr < ar && cc < bc) || (ar == br && ar == cr && cc < ac && cc < bc)){
+			//printf("a: %d, b: %d, c: %d, c\n", a, b, c);
 			coords[nzS].i = cr;
 			coords[nzS].j = cc;
 			data[nzS] = C->data[c];
 			c++;
 		}
 		else if((ar == br && ac == bc ) && (ar < cr || ac < cc)){
+			//printf("a: %d, b: %d, c: %d, a + b\n", a, b, c);
 			coords[nzS].i = ar;
 			coords[nzS].j = ac;
 			data[nzS] = A->data[a] + B->data[b];
@@ -347,6 +372,7 @@ void add_3(const COO A, const COO B, const COO C, COO *S){
 			b++;
 		}
 		else if((ar == cr && ac == cc) && (ar < br || ac < bc)){
+			//printf("a: %d, b: %d, c: %d, a + c\n", a, b, c);
 			coords[nzS].i = ar;
 			coords[nzS].j = ac;
 			data[nzS] = A->data[a] + C->data[c];
@@ -354,6 +380,7 @@ void add_3(const COO A, const COO B, const COO C, COO *S){
 			c++;
 		}
 		else if((br == cr && bc == cc) && (br < ar || bc < ac)){
+			//printf("a: %d, b: %d, c: %d, b + c\n", a, b, c);
 			coords[nzS].i = br;
 			coords[nzS].j = bc;
 			data[nzS] = B->data[b] + C->data[c];
@@ -361,6 +388,7 @@ void add_3(const COO A, const COO B, const COO C, COO *S){
 			c++;
 		}
 		else{
+			//printf("a: %d, b: %d, c: %d, a + b + c\n", a, b, c);
 			coords[nzS].i = ar;
 			coords[nzS].j = ac;
 			data[nzS] = A->data[a] + B->data[b] + C->data[c];
@@ -458,6 +486,7 @@ void add_3(const COO A, const COO B, const COO C, COO *S){
 
 	//Insert the remaining values from the last matrix
 	//printf("\nBegin third loop\n");
+	//NOTE - Vectorise definitely because we can calculate the number of non zeros left and check we have enough memory a priori
 	while(f < nzF){
 		coords[nzS].i = F->coords[f].i;
 		coords[nzS].j = F->coords[f].j;
@@ -486,6 +515,7 @@ void add_3(const COO A, const COO B, const COO C, COO *S){
 	
 	*S = sp;
 	//printf("\n");
+	LIKWID_MARKER_STOP("Addition");
 	return;
 	
 }
@@ -494,7 +524,7 @@ void optimised_sparsemm_sum(const COO A, const COO B, const COO C,
 		const COO D, const COO E, const COO F,
 		COO *O)
 {
-	//LIKWID_MARKER_START("Optimised Sparsemm Sum - Whole Function");
+	LIKWID_MARKER_START("Optimised Sparsemm Sum - Whole Function");
 	COO sum1, sum2;
 	//printf("\nA + B + C");
 //	LIKWID_MARKER_START("Optimised Sparsemm Sum - First Addition");
@@ -523,6 +553,6 @@ void optimised_sparsemm_sum(const COO A, const COO B, const COO C,
 //	LIKWID_MARKER_START("Optimised Sparsemm Sum - Multiplication");
 	optimised_sparsemm(sum1, sum2, O);
 //	LIKWID_MARKER_STOP("Optimised Sparsemm Sum - Multiplication");
-	//LIKWID_MARKER_STOP("Optimised Sparsemm Sum - Whole Function");
+	LIKWID_MARKER_STOP("Optimised Sparsemm Sum - Whole Function");
 	return;
 }
