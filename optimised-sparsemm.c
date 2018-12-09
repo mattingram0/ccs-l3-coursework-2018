@@ -85,9 +85,8 @@ int row_sort(const void *a, const void *b){
 	}
 }
 
-void sort_coo(const COO A, COO* S, int compare(const void *, const void *), int** rowList){
-	int nz, size, c, d, diff, currRow, smallestRowLength = INT_MAX;
-	int	*IA = (int *)malloc((A->m + 1) * sizeof(int));
+void sort_coo(const COO A, COO* S, int compare(const void *, const void *)){
+	int nz, size, c, d, diff;
 	void * restrict unsorted, * restrict head;
 	COO sp;
 	nz = A->NZ;
@@ -115,8 +114,6 @@ void sort_coo(const COO A, COO* S, int compare(const void *, const void *), int*
 	//Allocate a new sparse COO object
 	alloc_sparse(A->m, A->n, nz, &sp);
 
-	currRow = 0;
-	IA[0] = 0;
 	head = unsorted;
 
 	//Vectorized Loop
@@ -131,24 +128,7 @@ void sort_coo(const COO A, COO* S, int compare(const void *, const void *), int*
 		head = (double *)head + 1;
 		//printf("[%d, %d, %f]\n", sp->coords[c].i, sp->coords[c].j, sp->data[c]);
 	}
-
-
-	//Generate the 'IA' list - list of the indexes in the 'data' array of the first element of each row
-	for(c = 0; c < nz; c++){
-		diff = sp->coords[c].i - currRow;
-		
-		//Vectorized Loop
-		#pragma GCC ivdep
-		for(d = 0; d < diff; d++){
-			IA[currRow + d + 1] = c;
-		}
-		
-		currRow += diff;
-	}
-
-	IA[A->m] = nz;
-	*rowList = IA;
-
+	
 	//printf("\n");
 	free(unsorted);
 	*S = sp;
@@ -160,8 +140,8 @@ void optimised_sparsemm(COO A, COO B, COO *C)
 //	LIKWID_MARKER_START("Optimised Sparsemm Sum - Multiplication");
 	LIKWID_MARKER_START("Optimised Sparsemm - Whole Function");
 	//printf("\n In OPTS\n");
-	int a, b, nzA, nzB, nzC = 0, m, n, estimate, newEstimate, currentCol = 0, beginRow = 0, *rowList, endRow = 0, l = 0; //TEST THIS - setting rowList = 0 is poor practice
-	double product, errorProp, *partial = NULL, aVal, *bProducts;
+	int a, b, nzA, nzB, nzC = 0, m, n, estimate, newEstimate, currentCol = 0, beginRow = 0;
+	double product, errorProp, *partial = NULL;
 	char coords[15];	//NOTE - this may be vulnerable to buffer of if mat large
 	GHashTable* sparseC = g_hash_table_new(g_str_hash, g_str_equal);
 
@@ -186,10 +166,10 @@ void optimised_sparsemm(COO A, COO B, COO *C)
 
 	//Sort by column, freeing our old matrix, then setting A to our sorted matrix to ensure it gets freed later in sparsemm.c
 	//printf("\nA + B + C: Column Sorted\n");
-	sort_coo(A, &AS, col_sort, &rowList);
-	//Sort by row, passing our row list (rowList) integer array pointer so that the sort function also returns our row list
+	sort_coo(A, &AS, col_sort);
+	//Sort by row
 	//printf("\nD + E: Row Sorted\n");
-	sort_coo(B, &BS, row_sort, &rowList);
+	sort_coo(B, &BS, row_sort);
 
 	LIKWID_MARKER_START("Multiplication");
 	
@@ -215,54 +195,38 @@ void optimised_sparsemm(COO A, COO B, COO *C)
 			break;
 
 		beginRow = b;
-		aVal = AS->data[a];
-		//printf("After Corrections: a: %d, b: %d\n",a, b);
-		//printf("BS->coords[b].i + 1: %d\n", BS->coords[b].i + 1);
-		endRow = rowList[BS->coords[b].i + 1];
-		bProducts = malloc((endRow - beginRow) * sizeof(double));
+		currentCol = AS->coords[a].j;
 		
-		//Pad/Vec
-		l = 0;
+		while(b < nzB && BS->coords[b].i == currentCol){
+			product = AS->data[a] * BS->data[b];
 
-		//Vectorised Loop. Restructured code so that this loop vectorised.
-		//If we knew a priori the minimum number of elements in any row in B, we could use this to guide the compiler to unravel the loop further.
-		#pragma GCC ivdep
-		for(b; b < endRow; b++){
-			bProducts[l] = aVal * B->data[b];
-			//printf("%f * %f = %f\n", aVal, B->data[b], bProducts[l]);
-			l++;
-		}
-
-		l = 0;
-		b = beginRow;
-
-		//Store in Hash Table - ugly and inefficient
-		for(b; b < endRow; b++){
+			//printf("A Data: %f, B Data: %f\n", AS->data[a], BS->data[a]);
 			sprintf(coords, "%d,%d", AS->coords[a].i, BS->coords[b].j);
 			partial = (double *) g_hash_table_lookup(sparseC, coords);
 
-			if(partial == NULL){ 
-				if(nzC == estimate){ 
+			if(partial == NULL){
+				//If we run out of memory, allocate more, relative to how far through our loops we are
+				if(nzC == estimate){
 					errorProp = ((double)nzA * (double)nzB - (((double)a * (double)nzB) + (double)b))/(((double)a * (double)nzB) + (double)b);
 					newEstimate = (int)(errorProp * estimate);
 					memPtr = (double *) malloc(sizeof(double) * newEstimate);
 					estimate += newEstimate;
-					g_ptr_array_add(memPtrs, (gpointer)memPtr);		
+					g_ptr_array_add(memPtrs, (gpointer)memPtr);
 				}
-				key = g_strdup(coords);									  
-				*memPtr = bProducts[l];		
+
+				key = g_strdup(coords);
+				*memPtr = product;
+
 				g_hash_table_insert(sparseC, key, memPtr);
 				nzC++;
 				memPtr++;
 			}else{
-				*partial += bProducts[l];
+				*partial += product;
 			}
-			l++;
+
+			b++;
 		}
-		//printf("\n");
-		free(bProducts);
-		//printf("\n");	
-		//If we have run out of memory, allocate more, proportionally to how far we are through our loops
+		//Store in Hash Table - ugly and inefficient
 	}
 	//printf("Finished Loops");
 	
