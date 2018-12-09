@@ -90,7 +90,7 @@ int row_sort(const void *a, const void *b){
 }
 
 void sort_coo(const COO A, COO* S, int compare(const void *, const void *), int** rowList){
-	int nz, size, c, k, diff, currRow, smallestRowLength = INT_MAX;
+	int nz, size, c, k, r, diff, currRow, smallestRowLength = INT_MAX;
 	int	*IA = (int *)malloc((A->m + 1) * sizeof(int));
 	void *unsorted, *head;
 	COO sp;
@@ -104,6 +104,8 @@ void sort_coo(const COO A, COO* S, int compare(const void *, const void *), int*
 	//VEC - Loop/Unravell
 	//WASN'T VECTORISED
 	//Create array of arrays to be sorted
+	//Potentially vectorise?? - Split into three loops to vectorise
+	//Or alternatively make all of them doubles, and address using i, i + 1, i + 2
 	for(c; c < nz; c++){
 		*(int *)head = A->coords[c].i;
 		head = (int *)head + 1;
@@ -133,18 +135,22 @@ void sort_coo(const COO A, COO* S, int compare(const void *, const void *), int*
 		sp->data[c] = *(double *)head;
 		head = (double *)head + 1;
 		//printf("[%d, %d, %f]\n", sp->coords[c].i, sp->coords[c].j, sp->data[c]);
+	}
 
-		//VECTORIZE??? NOTE - SPLIT INTO SEPARATE FUNCTION, may actually improve performance using SIMD
-		diff = sp->coords[c].i - currRow;
+	//WASN'T VECTORIZED
+	for(r = 0; r < nz; r++){
+		diff = sp->coords[r].i - currRow;
+		//WAS VECTORIZED
 		for(k = 0; k < diff; k++){
-			IA[currRow + k + 1] = c;	
+			IA[currRow + k + 1] = r;
 		}
-
+		
 		if(diff > 0){
 			if(IA[currRow + diff] - IA[currRow] < smallestRowLength){
 				smallestRowLength = IA[currRow + diff] - IA[currRow];
 			}
 		}
+
 		currRow += diff;
 	}
 
@@ -215,7 +221,9 @@ void optimised_sparsemm(COO A, COO B, COO *C)
 
 		b = beginRow;
 		//printf("Before Corrections: a: %d, b: %d\n",a, b);
-		//TEST
+
+		//TEST - Pretty sure this works accurately. Unfortunately, not vectorisable I don't think.
+		//Skip entries in A and B until we have a matching a row and b column
 		while(BS->coords[b].i != AS->coords[a].j && b < nzB && a < nzA){
 			while(BS->coords[b].i < AS->coords[a].j && b < nzB && a < nzA)
 				b++;
@@ -225,18 +233,6 @@ void optimised_sparsemm(COO A, COO B, COO *C)
 
 		if(a == nzA || b == nzB)
 			break;
-
-		//Skip values in our B matrix until our b row matches our a column
-		//NOT VECTORISED - control flow in loop
-		//while(b < nzB && BS->coords[b].i < AS->coords[a].j){
-//			b++;
-//		}
-//		//Skip values in our A matrix until our a column matches our b row
-//		//NOT VECTORISED - control flow in loop
-//		while(a < nzA && AS->coords[a].j < BS->coords[b].i){
-//			a++;
-//		}
-//
 
 		beginRow = b;
 		aVal = AS->data[a];
@@ -306,6 +302,7 @@ void optimised_sparsemm(COO A, COO B, COO *C)
 void add_3(const COO A, const COO B, const COO C, COO *S){
 
 	LIKWID_MARKER_START("Addition");
+	//ar = current row of a, ac = current column of c, etc
 	int a = 0, b = 0, c = 0, d = 0, e = 0, f = 0, ar, ac, br, bc, cr, cc, dr, dc, er, ec, fr, fc, nzA, nzB, nzC, nzD, nzE, nzF, nzS = 0;
 	double errorProp, estimate;
     struct coord *coords, *tempCoords;
@@ -332,7 +329,7 @@ void add_3(const COO A, const COO B, const COO C, COO *S){
     data = calloc((int) estimate, sizeof(double));
     //printf("\nAddition:");
 	
-	//Insert values until all of one matrix has been copied/added
+	//Loop through all three matrices, adding and inserting values as required, until one full matrix has been entirely added/inserted
 	//printf("Begin first loop\n");
 	while(a < nzA && b < nzB && c < nzC){
 		ar = A->coords[a].i;
@@ -432,7 +429,7 @@ void add_3(const COO A, const COO B, const COO C, COO *S){
 	nzD = D->NZ;
 	nzE = E->NZ;
 
-	//Insert values until all of the matrix of values have been inserted/added
+	//Loop through the remaining values of the other two matrices, adding and inserting as required, until all of the second matrices values have been added/inserted
 	//printf("\nBegin second loop\n");
 	while(d < nzD && e < nzE){
 		dr = D->coords[d].i;
@@ -485,25 +482,24 @@ void add_3(const COO A, const COO B, const COO C, COO *S){
 	nzF = F->NZ;
 
 	//Insert the remaining values from the last matrix
+	//Figure out if we have allocated enough memory before we begin our loops to make sure we have enough. Allows vectorisation of our loop
 	//printf("\nBegin third loop\n");
-	//NOTE - Vectorise definitely because we can calculate the number of non zeros left and check we have enough memory a priori
+	if((nzF - f) > (estimate - nzS)){
+		estimate += (nzF - f + 1);
+		tempCoords = realloc(coords, (int)estimate * sizeof(struct coord));
+		tempData = realloc(data, (int)estimate * sizeof(double));
+		coords = tempCoords;
+		data = tempData;
+		printf("Executed");
+	}
+
 	while(f < nzF){
 		coords[nzS].i = F->coords[f].i;
 		coords[nzS].j = F->coords[f].j;
 		data[nzS] = F->data[f];
 		f++;
-		
 		//printf("[%d, %d, %f]\n", coords[nzS].i, coords[nzS].j, data[nzS]);
-
 		nzS++;
-		if(nzS == (int)estimate){
-			estimate /= (((double)f)/((double)nzF) - 0.01); 
-			//printf("\n3. Updated Estimation: %d\n", (int)estimate);
-    		tempCoords = realloc(coords, (int)estimate * sizeof(struct coord));
-    		tempData = realloc(data, (int)estimate * sizeof(double));
-    		coords = tempCoords;
-    		data = tempData;
-		}
 	}
 
 	alloc_sparse(A->m, A->n, nzS, &sp);
@@ -527,32 +523,10 @@ void optimised_sparsemm_sum(const COO A, const COO B, const COO C,
 	LIKWID_MARKER_START("Optimised Sparsemm Sum - Whole Function");
 	COO sum1, sum2;
 	//printf("\nA + B + C");
-//	LIKWID_MARKER_START("Optimised Sparsemm Sum - First Addition");
 	add_3(A, B, C, &sum1);
-//	LIKWID_MARKER_STOP("Optimised Sparsemm Sum - First Addition");
-//	//printf("Sum1 Data 1: %f\n", sum1->data[0]);
-//	printf("Sum1 Data 2: %f\n", sum1->data[1]);
-//	printf("Sum1 Data 3: %f\n", sum1->data[2]);
-//	printf("Sum1 Data 4: %f\n", sum1->data[3]);
-//	printf("Sum1 Data 5: %f\n", sum1->data[4]);
-//	printf("Sum1 Data 6: %f\n", sum1->data[5]);
-//	printf("Sum1 Data 7: %f\n", sum1->data[6]);
-//
 	//printf("\nD + E + F");
-//	LIKWID_MARKER_START("Optimised Sparsemm Sum - Second Addition");
 	add_3(D, E, F, &sum2);
-//	LIKWID_MARKER_STOP("Optimised Sparsemm Sum - Second Addition");
-	//printf("Sum2 Data 1: %f\n", sum2->data[0]);
-	//printf("Sum2 Data 2: %f\n", sum2->data[1]);
-	//printf("Sum2 Data 3: %f\n", sum2->data[2]);
-	//printf("Sum2 Data 4: %f\n", sum2->data[3]);
-	//printf("Sum2 Data 5: %f\n", sum2->data[4]);
-	//printf("Sum2 Data 6: %f\n", sum2->data[5]);
-	//printf("Sum2 Data 7: %f\n", sum2->data[6]);
-	//printf("\nD + E + F");
-//	LIKWID_MARKER_START("Optimised Sparsemm Sum - Multiplication");
 	optimised_sparsemm(sum1, sum2, O);
-//	LIKWID_MARKER_STOP("Optimised Sparsemm Sum - Multiplication");
 	LIKWID_MARKER_STOP("Optimised Sparsemm Sum - Whole Function");
 	return;
 }
