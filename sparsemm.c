@@ -37,9 +37,9 @@ static int check_sparsemm()
 	double *basic, *opt;
 	int i, j, m, n, k;
 	int pass = 0;
-	m = 39;
-	k =511;
-	n =77;
+	m = 20;
+	k = 30;
+	n = 15;
 	//				printf("A:\n");
 	random_matrix(m, k, 0.1, &A); //creates random m x k matrix 
 	//				printf("B:\n");
@@ -80,7 +80,7 @@ static int check_sparsemm_sum()
 
 	m = 78;
 	k = 81;
-	n = 314;
+	n = 45;
 	//printf("A\n");
 	random_matrix(m, k, 0.1, &A);
 	//printf("\nB\n");
