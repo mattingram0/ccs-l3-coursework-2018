@@ -5,7 +5,6 @@
 
 #include "utils.h"
 
-
 #ifdef LIKWID_PERFMON
 #include <likwid.h>
 #else
@@ -128,63 +127,6 @@ int main(int argc, char **argv)
 	LIKWID_MARKER_INIT;
 	LIKWID_MARKER_THREADINIT;
 
-<<<<<<< HEAD
-    COO O;
-    FILE *f;
-    if (!(argc == 2 || argc == 4 || argc == 8)) {
-        fprintf(stderr, "Invalid arguments.\n");
-        fprintf(stderr, "Usage: %s CHECK\n", argv[0]);
-        fprintf(stderr, "  Check the implemented routines using randomly generated matrices.\n");
-        fprintf(stderr, "Alternate usage: %s O A B\n", argv[0]);
-        fprintf(stderr, "  Computes O = A B\n");
-        fprintf(stderr, "  Where A and B are filenames of matrices to read.\n");
-        fprintf(stderr, "  O is the filename of the matrix to be written.\n\n");
-        fprintf(stderr, "Alternate usage: %s O A B C D E F\n", argv[0]);
-        fprintf(stderr, "  Computes O = (A + B + C) (D + E + F)\n");
-        fprintf(stderr, "  Where A-F are the files names of matrices to read.\n");
-        fprintf(stderr, "  O is the filename of the matrix to be written.\n\n");
-        return 1;
-    }
-
-    if (argc == 2) {
-        int pass = 0;
-        if (strcmp(argv[1], "CHECK")) {
-            fprintf(stderr, "Invalid mode, expecting CHECK, got %s\n", argv[1]);
-            return 1;
-        }
-	    pass |= check_sparsemm();
-        pass |= check_sparsemm_sum();
-        
-        //printf("%d", pass);
-        return pass;
-    } else if (argc == 4) {
-        COO A, B;
-        read_sparse(argv[2], &A);
-        read_sparse(argv[3], &B);
-		
-        optimised_sparsemm(A, B, &O);
-
-        free_sparse(&A);
-        free_sparse(&B);
-    } else {
-        COO A, B, C, D, E, F;
-        read_sparse(argv[2], &A);
-        read_sparse(argv[3], &B);
-        read_sparse(argv[4], &C);
-        read_sparse(argv[5], &D);
-        read_sparse(argv[6], &E);
-        read_sparse(argv[7], &F);
-		
-        optimised_sparsemm_sum(A, B, C, D, E, F, &O);
-
-        free_sparse(&A);
-        free_sparse(&B);
-        free_sparse(&C);
-        free_sparse(&D);
-        free_sparse(&E);
-        free_sparse(&F);
-    }
-=======
 	COO O;
 	FILE *f;
 	if (!(argc == 2 || argc == 4 || argc == 8)) {
@@ -245,7 +187,6 @@ int main(int argc, char **argv)
 		free_sparse(&E);
 		free_sparse(&F);
 	}
->>>>>>> vectorise
 
 	LIKWID_MARKER_CLOSE;  
 	f = fopen(argv[1], "w");
