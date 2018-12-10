@@ -48,8 +48,17 @@ void convert_hashmap_to_sparse(GHashTable* hash, int m, int n, int NZ, COO* C){
 
 /* Comparator function used to compare keys in our hash table */
 gboolean coord_cmp(gconstpointer a, gconstpointer b){
-	//We assume that both pointers are pointers to integer arrays of length two, with i and j stored in the 0th and 1st location, respectively	
-	return (((int *)a)[0] == ((int *)b)[0] && ((int *)a)[1] == ((int *)b)[1]);
+	const gint ai = ((gint *)a)[0];
+	const gint aj = ((gint *)a)[1];
+	const gint bi = ((gint *)b)[0];
+	const gint bj = ((gint *)b)[1];
+
+	if(ai == bi){
+		if(aj == bj){
+			return 1;
+		}
+	}
+	return 0;
 }
 
 /* Comparator function used to sort a COO object by column value */
@@ -190,15 +199,6 @@ void optimised_sparsemm(COO A, COO B, COO *C){
 		while(b < nzB && BS->coords[b].i == currentCol){
 			
 			//If we run out of memory, allocate more, relative to how far through our loops we are
-			if(nzC == estimate){
-				errorProp = ((double)nzA * (double)nzB - (((double)a * (double)nzB) + (double)b))/(((double)a * (double)nzB) + (double)b);
-				newEstimate = (int)(errorProp * estimate);
-				valueMemory = (double *) malloc(sizeof(double) * newEstimate);
-				keyMemory = (int *) malloc(2 * sizeof(int) * newEstimate);
-				estimate += newEstimate;
-				g_ptr_array_add(memPtrs, (gpointer)valueMemory);
-				g_ptr_array_add(memPtrs, (gpointer)keyMemory);
-			}
 
 			product = AS->data[a] * BS->data[b];
 			key[0] = AS->coords[a].i;
@@ -208,6 +208,16 @@ void optimised_sparsemm(COO A, COO B, COO *C){
 			partial = (double *) g_hash_table_lookup(sparseC, (gpointer) key);
 
 			if(partial == NULL){
+				if(nzC == estimate){
+					errorProp = ((double)nzA * (double)nzB - (((double)a * (double)nzB) + (double)b))/(((double)a * (double)nzB) + (double)b);
+					newEstimate = (int)(errorProp * estimate);
+					valueMemory = (double *) malloc(sizeof(double) * newEstimate);
+					keyMemory = (int *) malloc(2 * sizeof(int) * newEstimate);
+					estimate += newEstimate;
+					g_ptr_array_add(memPtrs, (gpointer)valueMemory);
+					g_ptr_array_add(memPtrs, (gpointer)keyMemory);
+				}
+
 				keyMemory[0] = AS->coords[a].i;				
 				keyMemory[1] = BS->coords[b].j;
 				*valueMemory = product;
