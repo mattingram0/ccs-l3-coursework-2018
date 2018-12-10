@@ -150,6 +150,7 @@ void convert_dense_to_sparse(const double *dense, int m, int n,
             }
         }
     }
+    //printf("\n");
     *sparse = sp;
 }
 

@@ -9,8 +9,8 @@ PROFILE_FLAGS = -O3 -pthread -DLIKWID_PERFMON -I/ddn/apps/Cluster-Apps/likwid/4.
 LIKWID_FLAGS = -llikwid -lm
 GLIB_FLAGS = `pkg-config --cflags --libs glib-2.0`
 LDFLAGS = -lm
-CC = gcc
-VEC_FLAGS = -fopt-info-missed-loop
+CC = gcc -std=c99
+VEC_FLAGS = -fopt-info-optimized 
 
 #Variable to test if we are profiling:
 PROFILE = false
@@ -47,8 +47,8 @@ sparsemm: sparsemm.c $(OBJ)
 	$(CC) $(CFLAGS) $(GLIB_FLAGS) -o $@ $< $(OBJ) $(LDFLAGS)
 
 vec: sparsemm.c
-	$(CC) $(CFLAGS) $(PROFILE_FLAGS) $(GLIB_FLAGS) -o $@ $< $(OBJ) $(LDFLAGS) $(LIKWID_FLAGS)
 	$(CC) $(VEC_FLAGS) $(PROFILE_FLAGS) $(CFLAGS) $(GLIB_FLAGS) optimised-sparsemm.c -o optimised-sparsemm.o -c $(LIKWID_FLAGS)
+	$(CC) $(CFLAGS) $(PROFILE_FLAGS) $(GLIB_FLAGS) -o $@ $< $(OBJ) $(LDFLAGS) $(LIKWID_FLAGS)
 	
 profile: sparsemm.c $(OBJ)
 	$(CC) $(PROFILE_FLAGS) $(GLIB_FLAGS) -o $@ $< $(OBJ) $(LIKWID_FLAGS)
