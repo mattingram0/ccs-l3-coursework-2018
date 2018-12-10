@@ -56,11 +56,6 @@ void convert_hashmap_to_sparse(GHashTable* hash, int m, int n, int NZ, COO* C){
 	*C = sp;
 }
 
-
-/* Computes C = A*B.
- * C should be allocated by this routine.
- */
-//VEC?
 int col_sort(const void *a, const void *b){
 	if(((int *)a)[1] < ((int *)b)[1]){
 		return -1;
@@ -137,9 +132,7 @@ void sort_coo(const COO A, COO* S, int compare(const void *, const void *)){
 
 void optimised_sparsemm(COO A, COO B, COO *C)
 {
-//	LIKWID_MARKER_START("Optimised Sparsemm Sum - Multiplication");
 	LIKWID_MARKER_START("Optimised Sparsemm - Whole Function");
-	//printf("\n In OPTS\n");
 	int a, b, nzA, nzB, nzC = 0, m, n, estimate, newEstimate, currentCol = 0, beginRow = 0;
 	double product, errorProp, *partial = NULL;
 	char coords[15];	//NOTE - this may be vulnerable to buffer of if mat large
@@ -180,7 +173,6 @@ void optimised_sparsemm(COO A, COO B, COO *C)
 		//Move our b back down to the beginning of the row which matches our column
 
 		b = beginRow;
-		//printf("Before Corrections: a: %d, b: %d\n",a, b);
 
 		//TEST - Pretty sure this works accurately. Unfortunately, not vectorisable I don't think.
 		//Skip entries in A and B until we have a matching a row and b column
@@ -226,7 +218,6 @@ void optimised_sparsemm(COO A, COO B, COO *C)
 
 			b++;
 		}
-		//Store in Hash Table - ugly and inefficient
 	}
 	//printf("Finished Loops");
 	
@@ -342,6 +333,7 @@ void add_3(const COO A, const COO B, const COO C, COO *S){
 
 		nzS++;
 
+		//Allocate more memory as required.
 		if(nzS == (int)estimate){
 			estimate /= (((double)((double)a + (double)b + (double)c))/((double)((double)nzA + (double)nzB + (double)nzC)) - 0.01); 
 			//printf("\n1. Updated Estimation: %d\n", (int)estimate);
@@ -405,6 +397,7 @@ void add_3(const COO A, const COO B, const COO C, COO *S){
 		//printf("[%d, %d, %f]\n", coords[nzS].i, coords[nzS].j, data[nzS]);
 		nzS++;
 
+		//Add more money as required
 		if(nzS == (int)estimate){
 			estimate /= (((double)((double)d + (double)e))/((double)((double)nzD + (double)nzE)) - 0.01); 
 			//printf("\n2. Updated Estimation: %d\n", (int)estimate);
@@ -438,6 +431,7 @@ void add_3(const COO A, const COO B, const COO C, COO *S){
 	}
 
 	//Vectorised Loop. Insert the remaining values from the last matrix
+	#pragma GCC ivdep
 	while(f < nzF){
 		coords[nzS].i = F->coords[f].i;
 		coords[nzS].j = F->coords[f].j;
