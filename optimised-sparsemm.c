@@ -154,7 +154,7 @@ void optimised_sparsemm(COO A, COO B, COO *C)
 	n = B->n;
 	*C = NULL;
 	estimate = (int)(((double)nzA * (double)B->m /(double)A->n) + ((double)nzB * (double)A->n / (double)B->n));
-	valueMemory = (double *) malloc(sizeof(double) * estimate); 
+	memPtr = (double *) malloc(sizeof(double) * estimate); 
 	g_ptr_array_add(memPtrs, (gpointer)memPtr);	
 
 	//Sort by column, freeing our old matrix, then setting A to our sorted matrix to ensure it gets freed later in sparsemm.c
